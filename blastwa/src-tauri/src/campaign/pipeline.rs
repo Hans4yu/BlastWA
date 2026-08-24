@@ -21,6 +21,11 @@ pub struct Pipeline {
     pub sessions: SessionManager,
     /// live wa web page handles keyed by account name
     pub pages: Arc<Mutex<HashMap<String, chromiumoxide::Page>>>,
+    /// accounts whose page has wpp confirmed ready
+    pub wpp_ready: Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+    /// global gate: only one wpp injection at a time (concurrent bundle
+    /// execution on the same target resets the cdp websocket)
+    pub wpp_inject_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl Pipeline {
@@ -29,6 +34,8 @@ impl Pipeline {
             state,
             sessions: SessionManager::new(accounts_dir, chrome_path),
             pages: Arc::new(Mutex::new(HashMap::new())),
+            wpp_ready: Arc::new(tokio::sync::Mutex::new(std::collections::HashSet::new())),
+            wpp_inject_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -147,6 +154,31 @@ impl Pipeline {
         v.into_value::<String>().ok()
     }
 
+    /// guarantee wpp is available on an account's page. serialized globally
+    /// and memoized per account: concurrent injections of the ~1mb bundle on
+    /// the same target reset the cdp websocket ("cdp evaluate failed").
+    pub async fn ensure_wpp_for(&self, account: &str) -> anyhow::Result<()> {
+        if self.wpp_ready.lock().await.contains(account) {
+            return Ok(());
+        }
+        let _gate = self.wpp_inject_lock.lock().await;
+        if self.wpp_ready.lock().await.contains(account) {
+            return Ok(());
+        }
+        let page = self
+            .page_handle(account)
+            .await
+            .ok_or_else(|| anyhow::anyhow!("no live page for account {account}"))?;
+        let mut injector = JsInjector::new(&page);
+        let wpp_local = std::path::Path::new(&crate::config::settings::AppConfig::app_dir())
+            .join("wpp")
+            .join("wpp.js");
+        let code = std::fs::read_to_string(&wpp_local).ok();
+        injector.ensure_wpp(code.as_deref()).await?;
+        self.wpp_ready.lock().await.insert(account.to_string());
+        Ok(())
+    }
+
     /// injector for feature commands (groups, autoreply) that must not launch
     /// chrome or wait for a qr scan: uses the attached page, or attaches via
     /// the known cdp port, and guarantees wpp is available before returning.
@@ -173,16 +205,8 @@ impl Pipeline {
             }
         };
 
-        let mut injector = JsInjector::new(&page);
-        let wpp_local = std::path::Path::new(&crate::config::settings::AppConfig::app_dir())
-            .join("wpp")
-            .join("wpp.js");
-        let wpp_code = std::fs::read_to_string(&wpp_local).ok();
-        injector
-            .ensure_wpp(wpp_code.as_deref())
-            .await
-            .with_context(|| format!("account {account}: WPP bootstrap for groups"))?;
-        Ok(injector)
+        self.ensure_wpp_for(account).await?;
+        Ok(JsInjector::new(&page))
     }
 
     /// non-launching page accessor for status probes.

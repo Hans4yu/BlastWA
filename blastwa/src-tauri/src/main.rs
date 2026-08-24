@@ -179,20 +179,18 @@ async fn probe_account_state(
             };
             // authenticated but no identity yet: modern wa web keeps the wid
             // out of localStorage, so kick off a one-shot wpp bootstrap and
-            // let the next poll pick the number up via WPP.conn.getMyUserId()
+            // let the next poll pick the number up via WPP.conn.getMyUserId().
+            // routed through the pipeline gate so it can never race with a
+            // groups/autoreply injection of the same page.
             if auth && number.is_none() {
                 let mut boot = ctx.wpp_bootstrapped.lock().unwrap();
                 if !boot.get(name).copied().unwrap_or(false) {
                     boot.insert(name.to_string(), true);
                     drop(boot);
-                    let wpp_local = AppConfig::app_dir()
-                        .join("wpp")
-                        .join("wpp.js");
-                    let code = std::fs::read_to_string(&wpp_local).ok();
-                    let page = page.clone();
+                    let pipeline = ctx.pipeline.clone();
+                    let account = name.to_string();
                     tauri::async_runtime::spawn(async move {
-                        let mut inj = blastwa_core::browser::js_injector::JsInjector::new(&page);
-                        if let Err(e) = inj.ensure_wpp(code.as_deref()).await {
+                        if let Err(e) = pipeline.ensure_wpp_for(&account).await {
                             log::warn!("wpp bootstrap for number identity failed: {e:#}");
                         }
                     });
