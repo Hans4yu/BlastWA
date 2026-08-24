@@ -37,22 +37,66 @@
       })[c]);
     }
 
+    function showEmpty(msg) {
+      $('groups-empty').textContent = msg;
+      $('groups-empty').style.display = '';
+    }
+
+    async function grab(groupId, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Grabbing...';
+      try {
+        const r = await invoke('grab_participants', {
+          account: window.__groupsAccount,
+          groupId,
+        });
+        const n = (r && (r.count ?? r.grabbed)) ?? 0;
+        alert('Grabbed ' + n + ' participants into the contact list');
+      } catch (e) {
+        alert('Grab failed: ' + (e && e.message ? e.message : e));
+      }
+      btn.disabled = false;
+      btn.textContent = 'Grab Participants';
+    }
+
     async function refresh() {
-      const res = await invoke('list_groups');
+      showEmpty('Loading groups...');
+      // groups need a live whatsapp session: prefer a connected account,
+      // fall back to one with a running browser
+      const accounts = await invoke('list_accounts');
+      const list = Array.isArray(accounts) ? accounts : [];
+      const account = (list.find((a) => a.connected) || list.find((a) => a.browser_running) || {}).name;
+      if (!account) {
+        showEmpty('No running account. Open a browser from the Dashboard and scan the QR first.');
+        return;
+      }
+      window.__groupsAccount = account;
+
+      let res;
+      try {
+        res = await invoke('list_groups', { account });
+      } catch (e) {
+        showEmpty('Failed to load groups: ' + (e && e.message ? e.message : e));
+        return;
+      }
       const groups = Array.isArray(res) ? res : [];
       $('groups-total').textContent = groups.length;
-      $('groups-empty').style.display = groups.length ? 'none' : '';
+      if (!groups.length) {
+        showEmpty('No groups found for ' + account + '. Make sure the account is fully loaded (chat list visible).');
+        return;
+      }
+      $('groups-empty').style.display = 'none';
       $('groups-body').innerHTML = groups.map((g) => `
         <tr>
           <td><b>${esc(g.name)}</b></td>
           <td class="mono">${esc(g.id)}</td>
           <td>
-            <button class="btn btn-sm"
-              onclick="window.blastwa.invoke('grab_participants', { groupId: '${esc(g.id)}' }).then(r => alert('Grabbed ' + ((r.count) ?? r.length ?? (r.grabbed ?? 0)) + ' participants'))">
-              Grab Participants
-            </button>
+            <button class="btn btn-sm" data-gid="${esc(g.id)}">Grab Participants</button>
           </td>
         </tr>`).join('');
+      $('groups-body').querySelectorAll('button[data-gid]').forEach((btn) => {
+        btn.addEventListener('click', () => grab(btn.dataset.gid, btn));
+      });
     }
 
     await refresh();

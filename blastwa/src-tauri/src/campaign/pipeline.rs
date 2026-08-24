@@ -147,6 +147,44 @@ impl Pipeline {
         v.into_value::<String>().ok()
     }
 
+    /// injector for feature commands (groups, autoreply) that must not launch
+    /// chrome or wait for a qr scan: uses the attached page, or attaches via
+    /// the known cdp port, and guarantees wpp is available before returning.
+    pub async fn get_injector_attached(
+        &self,
+        account: &str,
+    ) -> anyhow::Result<crate::browser::js_injector::JsInjector> {
+        let page = match self.page_handle(account).await {
+            Some(p) => p,
+            None => {
+                let reg = crate::api::server::sessions_registry();
+                let port = reg
+                    .lock()
+                    .await
+                    .iter()
+                    .find(|(n, _): &(String, u16)| n == account)
+                    .map(|(_, p)| *p);
+                let Some(port) = port else {
+                    anyhow::bail!(
+                        "no running browser for account {account} - open it from the dashboard first"
+                    );
+                };
+                self.attach(account, port).await?
+            }
+        };
+
+        let mut injector = JsInjector::new(&page);
+        let wpp_local = std::path::Path::new(&crate::config::settings::AppConfig::app_dir())
+            .join("wpp")
+            .join("wpp.js");
+        let wpp_code = std::fs::read_to_string(&wpp_local).ok();
+        injector
+            .ensure_wpp(wpp_code.as_deref())
+            .await
+            .with_context(|| format!("account {account}: WPP bootstrap for groups"))?;
+        Ok(injector)
+    }
+
     /// non-launching page accessor for status probes.
     /// returns None when no live session exists for the account.
     pub async fn page_handle(&self, name: &str) -> Option<chromiumoxide::Page> {

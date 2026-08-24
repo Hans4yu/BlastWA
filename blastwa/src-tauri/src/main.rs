@@ -475,7 +475,7 @@ async fn list_groups(
     account: String,
     ctx: State<'_, AppCtx>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let injector = ctx.pipeline.get_injector(&account).await.map_err(|e| e.to_string())?;
+    let injector = ctx.pipeline.get_injector_attached(&account).await.map_err(|e| e.to_string())?;
     let groups = group_grabber::list_groups(&injector)
         .await
         .map_err(|e| e.to_string())?;
@@ -491,7 +491,7 @@ async fn grab_participants(
     group_id: String,
     ctx: State<'_, AppCtx>,
 ) -> Result<serde_json::Value, String> {
-    let injector = ctx.pipeline.get_injector(&account).await.map_err(|e| e.to_string())?;
+    let injector = ctx.pipeline.get_injector_attached(&account).await.map_err(|e| e.to_string())?;
     let rows = group_grabber::grab_participants(&injector, &group_id)
         .await
         .map_err(|e| e.to_string())?;
