@@ -1,36 +1,57 @@
-<h1 class="page-title">Contacts</h1>
-<p class="page-subtitle">Import and manage your blast contact list</p>
-
-<div class="card">
-  <div class="flex-between">
-    <div>
-      <button class="btn" onclick="document.getElementById('import-file').click()">Import .txt / .csv / .xlsx</button>
-      <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
-        style="display:none" onchange="handleImport(this)" />
-    </div>
-    <label class="checkbox-label">
-      <input type="checkbox" id="remove-dupes" checked />
-      Remove duplicates
-    </label>
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Contacts</h1>
+    <p class="page-subtitle">Import and manage your blast contact list</p>
   </div>
-  <p style="margin-top:8px;color:var(--text-dim);font-size:12px">
-    .txt format: <span class="mono">number|fullname|var1|var2|var3|var4|var5</span> (one per line, extra columns optional)
-  </p>
+  <label class="checkbox-label">
+    <input type="checkbox" id="remove-dupes" checked />
+    Remove duplicates
+  </label>
 </div>
 
-<div class="card table-wrap">
-  <div class="flex-between" style="margin-bottom:10px">
-    <h3 style="margin:0">Contact List — <span id="total-count">0</span> total</h3>
-    <button class="btn btn-sm btn-danger" onclick="clearAll()">Clear List</button>
+<div class="panel">
+  <div class="panel-header">
+    <span>Import</span>
+    <span class="panel-menu">&#9776;</span>
   </div>
+  <div class="panel-body">
+    <div class="flex-between">
+      <div class="row">
+        <button class="btn" onclick="document.getElementById('import-file').click()">Import .txt / .csv / .xlsx</button>
+        <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
+          style="display:none" onchange="handleImport(this)" />
+        <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
+      </div>
+      <span style="font-size:11px;color:var(--text-dim)">
+        .txt format: <span class="mono">number|fullname|var1|var2|var3|var4|var5</span> (one per line, extra columns optional)
+      </span>
+    </div>
+  </div>
+</div>
 
-  <table>
-    <thead>
-      <tr><th>#</th><th>Number</th><th>Full Name</th><th>Var1</th><th>Var2</th><th>Var3</th><th>Var4</th><th>Var5</th></tr>
-    </thead>
-    <tbody id="contacts-body"></tbody>
-  </table>
-  <div class="empty-state" id="contacts-empty">No contacts loaded. Import a file to get started.</div>
+<div class="panel">
+  <div class="panel-header">
+    <span>Contact List</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body flush">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:30px">#</th>
+            <th>Number</th><th>Full Name</th>
+            <th>Var1</th><th>Var2</th><th>Var3</th><th>Var4</th><th>Var5</th>
+          </tr>
+        </thead>
+        <tbody id="contacts-body"></tbody>
+      </table>
+      <div class="empty-state" id="contacts-empty">No contacts loaded. Import a file to get started.</div>
+    </div>
+    <div class="counts-bar">
+      <span>Total: <b id="total-count">0</b></span>
+    </div>
+  </div>
 </div>
 
 <script>

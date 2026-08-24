@@ -8,29 +8,111 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-logo">B</div>
-        <div class="brand-name">BlastWA</div>
-      </div>
-      <nav class="nav" id="nav">
-        <button class="nav-item active" data-page="dashboard">🏠 Dashboard</button>
-        <button class="nav-item" data-page="sending">🚀 Sending</button>
-        <button class="nav-item" data-page="contacts">👥 Contacts</button>
-        <button class="nav-item" data-page="groups">👨‍👩‍👧‍👦 Groups</button>
-        <button class="nav-item" data-page="autoreply">🤖 Auto Reply</button>
-        <button class="nav-item" data-page="templates">📝 Templates</button>
-        <button class="nav-item" data-page="log">📋 Log</button>
-        <button class="nav-item" data-page="settings">⚙️ Settings</button>
-      </nav>
-      <div class="sidebar-footer">
-        <span style="font-size:11px;color:var(--text-dim)">v0.1.0 · no license · ever</span>
-      </div>
-    </aside>
 
+    <!-- menu bar -->
+    <nav class="menubar" id="menubar">
+      <div class="menu-item" data-menu>
+        <button>File</button>
+        <div class="menu-dropdown">
+          <button data-action="nav" data-page="sending">New Campaign</button>
+          <button data-action="nav" data-page="contacts">Import Contacts</button>
+          <button data-action="nav" data-page="log">Export Log</button>
+          <div class="menu-sep"></div>
+          <button data-action="exit">Exit</button>
+        </div>
+      </div>
+      <div class="menu-item" data-menu>
+        <button>Edit</button>
+        <div class="menu-dropdown">
+          <button data-action="nav" data-page="contacts">Clear Contacts</button>
+          <button data-action="nav" data-page="log">Clear Log</button>
+        </div>
+      </div>
+      <div class="menu-item" data-menu>
+        <button>View</button>
+        <div class="menu-dropdown">
+          <button data-action="nav" data-page="dashboard">Dashboard</button>
+          <button data-action="nav" data-page="sending">Sending</button>
+          <button data-action="nav" data-page="contacts">Contacts</button>
+          <button data-action="nav" data-page="groups">Groups</button>
+          <button data-action="nav" data-page="autoreply">Auto Reply</button>
+          <button data-action="nav" data-page="templates">Templates</button>
+          <button data-action="nav" data-page="log">Log</button>
+          <button data-action="nav" data-page="settings">Settings</button>
+        </div>
+      </div>
+      <div class="menu-item" data-menu>
+        <button>Settings</button>
+        <div class="menu-dropdown">
+          <button data-action="nav" data-page="settings">Open Settings</button>
+        </div>
+      </div>
+      <div class="menu-item" data-menu>
+        <button>Tools</button>
+        <div class="menu-dropdown">
+          <button data-action="nav" data-page="groups">Groups Grabber</button>
+          <button data-action="nav" data-page="autoreply">Auto Reply Rules</button>
+          <button data-action="nav" data-page="templates">Templates</button>
+        </div>
+      </div>
+      <div class="menu-item" data-menu>
+        <button>Help</button>
+        <div class="menu-dropdown">
+          <button data-action="about">About BlastWA</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- toolbar navigation -->
+    <nav class="toolbar" id="nav">
+      <button class="tool-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span class="tool-label">Dashboard</span>
+      </button>
+      <button class="tool-item" data-page="sending">
+        <svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+        <span class="tool-label">Send Campaign</span>
+      </button>
+      <button class="tool-item" data-page="contacts">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="tool-label">Contacts</span>
+      </button>
+      <button class="tool-item" data-page="groups">
+        <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6v3l-2 4h16l-2-4V9a6 6 0 0 0-6-6z"/><path d="M9 21h6"/></svg>
+        <span class="tool-label">Groups</span>
+      </button>
+      <button class="tool-item" data-page="autoreply">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="m9 10 2 2 4-4"/></svg>
+        <span class="tool-label">Auto Reply</span>
+      </button>
+      <button class="tool-item" data-page="templates">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg>
+        <span class="tool-label">Templates</span>
+      </button>
+      <button class="tool-item" data-page="log">
+        <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <span class="tool-label">Log</span>
+      </button>
+      <button class="tool-item" data-page="settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span class="tool-label">Settings</span>
+      </button>
+    </nav>
+
+    <!-- page content -->
     <main class="content" id="content">
       <!-- pages load here -->
     </main>
+
+    <!-- status bar -->
+    <div class="statusbar" id="statusbar">
+      <span><span class="status-dot off" id="sb-dot"></span><span id="sb-conn">Not connected</span></span>
+      <span class="status-sep"></span>
+      <span id="sb-login">Logged Out</span>
+      <span class="status-sep"></span>
+      <span id="sb-account">Account: -</span>
+      <span class="status-right">BlastWA v0.2.0</span>
+    </div>
   </div>
 
   <script type="module" src="main.js"></script>

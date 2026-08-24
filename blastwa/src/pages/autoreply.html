@@ -1,20 +1,36 @@
-<h1 class="page-title">Auto Reply</h1>
-<p class="page-subtitle">Keyword-based auto responder rules</p>
-
-<div class="card">
-  <div class="flex-between">
-    <h3 style="margin:0">Rules</h3>
-    <button class="btn btn-sm" onclick="addRuleRow()">+ Add Rule</button>
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Auto Reply</h1>
+    <p class="page-subtitle">Keyword-based auto responder rules</p>
   </div>
-  <br />
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Enabled</th><th>Name</th><th>Match Type</th><th>Keyword</th><th>Reply Message</th><th></th></tr>
-      </thead>
-      <tbody id="rules-body"></tbody>
-    </table>
-    <div class="empty-state" id="rules-empty">No rules yet. Add one to start auto-replying.</div>
+  <button class="btn" onclick="addRuleRow()">+ Add Rule</button>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>Rules</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body flush">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:60px">Enabled</th>
+            <th style="width:160px">Name</th>
+            <th style="width:130px">Match Type</th>
+            <th style="width:180px">Keyword</th>
+            <th>Reply Message</th>
+            <th style="width:80px"></th>
+          </tr>
+        </thead>
+        <tbody id="rules-body"></tbody>
+      </table>
+      <div class="empty-state" id="rules-empty">No rules yet. Add one to start auto-replying.</div>
+    </div>
+    <div class="counts-bar">
+      <span>Rules: <b id="rules-count">0</b></span>
+    </div>
   </div>
 </div>
 
@@ -41,12 +57,18 @@
         <td><input type="text" class="r-reply" placeholder="Thanks for your interest!" /></td>
         <td><button class="btn btn-sm btn-danger" onclick="this.closest('tr').remove(); syncEmpty()">Delete</button></td>`;
       $('rules-body').appendChild(tr);
+      syncCount();
     };
 
     window.syncEmpty = function () {
       $('rules-empty').style.display =
         $('rules-body').children.length ? 'none' : '';
+      syncCount();
     };
+
+    function syncCount() {
+      $('rules-count').textContent = $('rules-body').children.length;
+    }
 
     const res = await invoke('load_rules');
     const rules = Array.isArray(res) ? res : [];

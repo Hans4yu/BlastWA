@@ -1,14 +1,29 @@
-<h1 class="page-title">Groups</h1>
-<p class="page-subtitle">Grab WhatsApp group participants into your contact list</p>
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Groups</h1>
+    <p class="page-subtitle">Grab WhatsApp group participants into your contact list</p>
+  </div>
+</div>
 
-<div class="card table-wrap">
-  <table>
-    <thead>
-      <tr><th>Group Name</th><th>Group ID</th><th style="width:200px">Actions</th></tr>
-    </thead>
-    <tbody id="groups-body"></tbody>
-  </table>
-  <div class="empty-state" id="groups-empty">Loading groups... make sure an account is connected.</div>
+<div class="panel">
+  <div class="panel-header">
+    <span>WhatsApp Groups</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body flush">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Group Name</th><th>Group ID</th><th style="width:200px">Actions</th></tr>
+        </thead>
+        <tbody id="groups-body"></tbody>
+      </table>
+      <div class="empty-state" id="groups-empty">Loading groups... make sure an account is connected.</div>
+    </div>
+    <div class="counts-bar">
+      <span>Total: <b id="groups-total">0</b></span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -25,14 +40,15 @@
     async function refresh() {
       const res = await invoke('list_groups');
       const groups = Array.isArray(res) ? res : [];
+      $('groups-total').textContent = groups.length;
       $('groups-empty').style.display = groups.length ? 'none' : '';
       $('groups-body').innerHTML = groups.map((g) => `
         <tr>
-          <td>${esc(g.name)}</td>
+          <td><b>${esc(g.name)}</b></td>
           <td class="mono">${esc(g.id)}</td>
           <td>
             <button class="btn btn-sm"
-              onclick="window.blastwa.invoke('grab_participants', { groupId: '${esc(g.id)}' }).then(r => alert('Grabbed ' + ((r.count) ?? r.length ?? 0) + ' participants'))">
+              onclick="window.blastwa.invoke('grab_participants', { groupId: '${esc(g.id)}' }).then(r => alert('Grabbed ' + ((r.count) ?? r.length ?? (r.grabbed ?? 0)) + ' participants'))">
               Grab Participants
             </button>
           </td>

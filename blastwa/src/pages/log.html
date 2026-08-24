@@ -1,28 +1,41 @@
-<h1 class="page-title">Message Log</h1>
-<p class="page-subtitle">Campaign send history</p>
-
-<div class="card">
-  <div class="flex-between" style="margin-bottom:12px">
-    <select id="log-filter" style="max-width:200px">
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Message Log</h1>
+    <p class="page-subtitle">Campaign send history</p>
+  </div>
+  <div class="row">
+    <select id="log-filter" style="width:160px">
       <option value="">All statuses</option>
       <option value="sent">Sent only</option>
       <option value="failed">Failed only</option>
       <option value="pending">Pending only</option>
     </select>
-    <div>
-      <button class="btn btn-secondary btn-sm" onclick="exportLog('csv')">Export CSV</button>
-      <button class="btn btn-secondary btn-sm" onclick="exportLog('xlsx')">Export Excel</button>
-    </div>
+    <button class="btn btn-secondary" onclick="exportLog('csv')">Export CSV</button>
+    <button class="btn btn-secondary" onclick="exportLog('xlsx')">Export Excel</button>
   </div>
+</div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Timestamp</th><th>Number</th><th>Full Name</th><th>Status</th><th>Error Reason</th></tr>
-      </thead>
-      <tbody id="log-body"></tbody>
-    </table>
-    <div class="empty-state" id="log-empty">No log entries yet.</div>
+<div class="panel">
+  <div class="panel-header">
+    <span>Send History</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body flush">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th><th>Number</th><th>Full Name</th>
+            <th style="width:90px">Status</th><th>Error Reason</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+      <div class="empty-state" id="log-empty">No log entries yet.</div>
+    </div>
+    <div class="counts-bar">
+      <span>Entries: <b id="log-count">0</b></span>
+    </div>
   </div>
 </div>
 
@@ -51,6 +64,7 @@
     const res = await invoke('get_logs', { status });
     const entries = Array.isArray(res) ? res : [];
 
+    document.getElementById('log-count').textContent = entries.length;
     document.getElementById('log-empty').style.display = entries.length ? 'none' : '';
     document.getElementById('log-body').innerHTML = entries.map(rowHtml).join('');
   }

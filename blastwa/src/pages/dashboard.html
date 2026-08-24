@@ -1,4 +1,4 @@
-<div class="flex-between">
+<div class="page-header">
   <div>
     <h1 class="page-title">Dashboard</h1>
     <p class="page-subtitle">WhatsApp account sessions status</p>
@@ -8,52 +8,69 @@
   </button>
 </div>
 
-<div class="grid grid-cards" id="accounts-grid">
-  <div class="empty-state">Loading accounts...</div>
+<div class="panel">
+  <div class="panel-header">
+    <span>WhatsApp Accounts</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body flush">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:30px">#</th>
+            <th>Name</th>
+            <th style="width:90px">Status</th>
+            <th style="width:80px">Port</th>
+            <th>Number</th>
+            <th style="width:220px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="accounts-body"></tbody>
+      </table>
+      <div class="empty-state" id="accounts-empty">Loading accounts...</div>
+    </div>
+    <div class="counts-bar">
+      <span>Total: <b id="accounts-total">0</b></span>
+    </div>
+  </div>
 </div>
 
 <script>
   window.init_dashboard = async function () {
     const { invoke } = window.blastwa;
-    const grid = document.getElementById('accounts-grid');
+    const $ = (id) => document.getElementById(id);
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[c]);
+    }
 
     const res = await invoke('list_accounts');
     const accounts = Array.isArray(res) ? res : (res.accounts || []);
+    $('accounts-total').textContent = accounts.length;
+    $('accounts-empty').style.display = accounts.length ? 'none' : '';
 
-    if (!accounts.length) {
-      grid.innerHTML = `<div class="empty-state card">No accounts yet. Click "+ Add Account" to scan a QR code.</div>`;
-      return;
-    }
-
-    grid.innerHTML = accounts.map((a) => `
-      <div class="card">
-        <div class="flex-between">
-          <h3>${escapeHtml(a.name)}</h3>
-          <span class="badge ${a.connected ? 'badge-green' : 'badge-red'}">
-            ${a.connected ? 'Connected' : 'Disconnected'}
-          </span>
-        </div>
-        <p class="mono" style="margin:8px 0;color:var(--text-dim)">
-          port: ${a.port} · ${escapeHtml(a.number || 'not scanned')}
-        </p>
-        <div class="row">
+    $('accounts-body').innerHTML = accounts.length ? accounts.map((a, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><b>${esc(a.name)}</b></td>
+        <td><span class="badge ${a.connected ? 'badge-green' : 'badge-red'}">
+          ${a.connected ? 'Connected' : 'Disconnected'}</span></td>
+        <td class="mono">${esc(a.port)}</td>
+        <td class="mono">${esc(a.number || 'not scanned')}</td>
+        <td>
           <button class="btn btn-sm btn-secondary"
-            onclick="window.blastwa.invoke('open_browser', { name: '${escapeHtml(a.name)}' })">
+            onclick="window.blastwa.invoke('open_browser', { name: '${esc(a.name)}' })">
             Open Browser
           </button>
-          <span class="spacer"></span>
           <button class="btn btn-sm btn-danger"
-            onclick="if(confirm('Remove account ${escapeHtml(a.name)}?')) window.blastwa.invoke('remove_account', { name: '${escapeHtml(a.name)}' })">
+            onclick="if(confirm('Remove account ${esc(a.name)}?')) window.blastwa.invoke('remove_account', { name: '${esc(a.name)}' })">
             Remove
           </button>
-        </div>
-      </div>
-    `).join('');
+        </td>
+      </tr>`).join('')
+      : `<tr><td colspan="6"><div class="empty-state">No accounts yet. Click "+ Add Account" to scan a QR code.</div></td></tr>`;
   };
-
-  function escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    })[c]);
-  }
 </script>

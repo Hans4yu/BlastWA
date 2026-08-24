@@ -1,24 +1,51 @@
-<h1 class="page-title">Templates</h1>
-<p class="page-subtitle">Reusable message templates with tags</p>
-
-<div class="flex-between" style="margin-bottom:16px">
-  <input type="text" id="tpl-search" placeholder="Search name or tag..." style="max-width:320px" />
-  <button class="btn" onclick="openNewTpl()">+ New Template</button>
-</div>
-
-<div id="tpl-editor" class="card" style="display:none">
-  <h3 id="tpl-editor-title">New Template</h3>
-  <div class="field"><label>Name</label><input type="text" id="tpl-name" /></div>
-  <div class="field"><label>Tags (comma separated)</label><input type="text" id="tpl-tags" placeholder="promo,sales" /></div>
-  <div class="field"><label>Body — supports spintax & variables</label><textarea id="tpl-body"></textarea></div>
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Templates</h1>
+    <p class="page-subtitle">Reusable message templates with tags</p>
+  </div>
   <div class="row">
-    <button class="btn" onclick="saveTpl()">Save</button>
-    <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
+    <input type="text" id="tpl-search" placeholder="Search name or tag..." style="width:240px" />
+    <button class="btn" onclick="openNewTpl()">+ New Template</button>
   </div>
 </div>
 
-<div class="grid grid-cards" id="tpl-grid">
-  <div class="empty-state">Loading templates...</div>
+<div class="panel" id="tpl-editor" style="display:none">
+  <div class="panel-header">
+    <span id="tpl-editor-title">New Template</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body">
+    <div class="field"><label>Name</label><input type="text" id="tpl-name" /></div>
+    <div class="field"><label>Tags (comma separated)</label><input type="text" id="tpl-tags" placeholder="promo,sales" /></div>
+    <div class="field"><label>Body (supports spintax &amp; variables</label><textarea id="tpl-body"></textarea></div>
+    <div class="row" style="margin-bottom:0">
+      <button class="btn" onclick="saveTpl()">Save</button>
+      <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>Template List</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body flush">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>Tags</th><th>Body Preview</th><th style="width:230px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tpl-body-rows"></tbody>
+      </table>
+      <div class="empty-state" id="tpl-empty">No templates found.</div>
+    </div>
+    <div class="counts-bar">
+      <span>Total: <b id="tpl-count">0</b></span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -42,29 +69,26 @@
     const res = q ? await invoke('search_templates', { query: q }) : await invoke('list_templates');
     const tpls = Array.isArray(res) ? res : [];
 
-    const grid = document.getElementById('tpl-grid');
-    grid.innerHTML = tpls.length ? tpls.map((t) => `
-      <div class="card">
-        <div class="flex-between">
-          <h3 style="margin:0">${esc(t.name)}</h3>
-        </div>
-        <p>${(t.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</p>
-        <p style="color:var(--text-dim);font-size:12px;margin:10px 0;min-height:32px">
-          ${esc(String(t.body || '').slice(0, 100))}${String(t.body).length > 100 ? '...' : ''}
-        </p>
-        <div class="row">
-          <button class="btn btn-sm"
+    const $ = (id) => document.getElementById(id);
+    $('tpl-count').textContent = tpls.length;
+    $('tpl-empty').style.display = tpls.length ? 'none' : '';
+
+    $('tpl-body-rows').innerHTML = tpls.map((t) => `
+      <tr>
+        <td><b>${esc(t.name)}</b></td>
+        <td>${(t.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</td>
+        <td style="white-space:normal;max-width:420px">${esc(String(t.body || '').slice(0, 100))}${String(t.body).length > 100 ? '...' : ''}</td>
+        <td>
+          <button class="btn btn-sm btn-secondary"
             onclick='window.blastwa.invoke("load_to_composer", ${JSON.stringify(JSON.stringify(t))}).then(()=>location.hash="#/sending")'>
             Load to Composer
           </button>
-          <span class="spacer"></span>
           <button class="btn btn-sm btn-danger"
             onclick="window.blastwa.invoke('delete_template', { id: '${t.id}' }).then(refresh)">
             Delete
           </button>
-        </div>
-      </div>`).join('')
-      : '<div class="empty-state">No templates found.</div>';
+        </td>
+      </tr>`).join('');
   }
 
   function openNewTpl() {
