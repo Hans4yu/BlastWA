@@ -221,14 +221,35 @@ impl Pipeline {
         // keep the handler alive for the lifetime of the app
         std::mem::forget(handler_task);
 
-        // prefer an existing whatsapp web tab over opening a fresh one
-        for p in browser.pages().await.unwrap_or_default() {
-            if let Ok(Some(url)) = p.url().await {
-                if url.contains("web.whatsapp.com") {
-                    pages.insert(account.to_string(), p.clone());
-                    return Ok(p);
+        // target discovery on a fresh cdp connection is async — pages() can
+        // return an empty/partial list right after connect, so retry until
+        // the wa tab shows up (or give up and open one below)
+        let mut wa_page: Option<chromiumoxide::Page> = None;
+        let mut wa_tabs: Vec<chromiumoxide::Page> = Vec::new();
+        for _ in 0..10 {
+            wa_tabs.clear();
+            for p in browser.pages().await.unwrap_or_default() {
+                if let Ok(Some(url)) = p.url().await {
+                    if url.contains("web.whatsapp.com") {
+                        wa_tabs.push(p);
+                    }
                 }
             }
+            if !wa_tabs.is_empty() {
+                wa_page = wa_tabs.first().cloned();
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        }
+
+        if let Some(page) = wa_page {
+            // heal duplicates from earlier races: keep the first wa tab,
+            // close the rest
+            for dup in wa_tabs.iter().skip(1) {
+                let _ = dup.clone().close().await;
+            }
+            pages.insert(account.to_string(), page.clone());
+            return Ok(page);
         }
 
         let page = browser
