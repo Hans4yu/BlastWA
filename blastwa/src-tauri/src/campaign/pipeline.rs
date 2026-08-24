@@ -162,8 +162,8 @@ impl Pipeline {
                     .lock()
                     .await
                     .iter()
-                    .find(|(n, _): &(String, u16)| n == account)
-                    .map(|(_, p)| *p);
+                    .find(|x| x.0 == account)
+                    .map(|x| x.1);
                 let Some(port) = port else {
                     anyhow::bail!(
                         "no running browser for account {account} - open it from the dashboard first"
