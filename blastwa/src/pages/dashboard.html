@@ -3,9 +3,7 @@
     <h1 class="page-title">Dashboard</h1>
     <p class="page-subtitle">WhatsApp account sessions status</p>
   </div>
-  <button class="btn" onclick="window.blastwa.invoke('add_account', { name: prompt('Account name:') })">
-    + Add Account
-  </button>
+  <button class="btn" onclick="addAccount()">+ Add Account</button>
 </div>
 
 <div class="panel">
@@ -38,39 +36,90 @@
 
 <script>
   window.init_dashboard = async function () {
-    const { invoke } = window.blastwa;
+    await renderAccounts();
+  };
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
+
+  function formatError(e) {
+    if (typeof e === 'string') return e;
+    if (e && e.message) return e.message;
+    try { return JSON.stringify(e); } catch (_) { return String(e); }
+  }
+
+  async function renderAccounts() {
     const $ = (id) => document.getElementById(id);
+    try {
+      const res = await window.blastwa.invoke('list_accounts');
+      const accounts = Array.isArray(res) ? res : (res.accounts || []);
 
-    function esc(s) {
-      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-      })[c]);
+      $('accounts-total').textContent = accounts.length;
+      $('accounts-empty').style.display = accounts.length ? 'none' : '';
+
+      $('accounts-body').innerHTML = accounts.length ? accounts.map((a, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td><b>${esc(a.name)}</b></td>
+          <td><span class="badge ${a.connected ? 'badge-green' : 'badge-yellow'}">
+            ${a.connected ? 'Connected' : 'Saved'}</span></td>
+          <td class="mono">${a.port != null ? esc(a.port) : '-'}</td>
+          <td class="mono">${esc(a.number || 'not scanned')}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary"
+              onclick="openAccountBrowser('${esc(a.name)}')">
+              Open Browser
+            </button>
+            <button class="btn btn-sm btn-danger"
+              onclick="removeAccount('${esc(a.name)}')">
+              Remove
+            </button>
+          </td>
+        </tr>`).join('')
+        : `<tr><td colspan="6"><div class="empty-state">No accounts yet. Click "+ Add Account" to scan a QR code.</div></td></tr>`;
+    } catch (e) {
+      $('accounts-empty').style.display = '';
+      $('accounts-empty').textContent = 'Failed to load accounts: ' + formatError(e);
     }
+  }
 
-    const res = await invoke('list_accounts');
-    const accounts = Array.isArray(res) ? res : (res.accounts || []);
-    $('accounts-total').textContent = accounts.length;
-    $('accounts-empty').style.display = accounts.length ? 'none' : '';
+  window.addAccount = async function () {
+    const name = prompt('Account name:');
+    if (name === null) return; // cancelled
+    const trimmed = name.trim();
+    if (!trimmed) {
+      alert('Account name is required.');
+      return;
+    }
+    try {
+      const res = await window.blastwa.invoke('add_account', { name: trimmed });
+      // account is saved either way; surface session warnings honestly
+      if (res && res.warning) alert(res.warning);
+    } catch (e) {
+      alert('Failed to add account: ' + formatError(e));
+    }
+    await renderAccounts();
+  };
 
-    $('accounts-body').innerHTML = accounts.length ? accounts.map((a, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td><b>${esc(a.name)}</b></td>
-        <td><span class="badge ${a.connected ? 'badge-green' : 'badge-red'}">
-          ${a.connected ? 'Connected' : 'Disconnected'}</span></td>
-        <td class="mono">${esc(a.port)}</td>
-        <td class="mono">${esc(a.number || 'not scanned')}</td>
-        <td>
-          <button class="btn btn-sm btn-secondary"
-            onclick="window.blastwa.invoke('open_browser', { name: '${esc(a.name)}' })">
-            Open Browser
-          </button>
-          <button class="btn btn-sm btn-danger"
-            onclick="if(confirm('Remove account ${esc(a.name)}?')) window.blastwa.invoke('remove_account', { name: '${esc(a.name)}' })">
-            Remove
-          </button>
-        </td>
-      </tr>`).join('')
-      : `<tr><td colspan="6"><div class="empty-state">No accounts yet. Click "+ Add Account" to scan a QR code.</div></td></tr>`;
+  window.openAccountBrowser = async function (name) {
+    try {
+      await window.blastwa.invoke('open_browser', { name });
+    } catch (e) {
+      alert('Failed to open browser session: ' + formatError(e));
+    }
+    await renderAccounts();
+  };
+
+  window.removeAccount = async function (name) {
+    if (!confirm('Remove account ' + name + '?')) return;
+    try {
+      await window.blastwa.invoke('remove_account', { name });
+    } catch (e) {
+      alert('Failed to remove account: ' + formatError(e));
+    }
+    await renderAccounts();
   };
 </script>

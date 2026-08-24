@@ -34,51 +34,157 @@ struct AppCtx {
 
 // ---------- accounts ----------
 
-#[tauri::command]
-async fn list_accounts() -> Result<Vec<serde_json::Value>, String> {
-    let reg = server::sessions_registry();
-    let list = reg.lock().await;
-    Ok(list
-        .iter()
-        .map(|(name, port)| serde_json::json!({ "name": name, "port": port, "connected": true }))
-        .collect())
+fn validate_account_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Account name is required".into());
+    }
+    if name.len() > 64 {
+        return Err("Account name is too long (max 64 characters)".into());
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(
+            "Account name may only contain letters, numbers, underscore and dash".into(),
+        );
+    }
+    Ok(())
 }
 
-async fn launch_session(chrome_path: String, accounts_dir: std::path::PathBuf, name: String) -> Result<u16, String> {
+/// port of the live chrome session for this account, if any
+async fn live_session_port(name: &str) -> Option<u16> {
+    let reg = server::sessions_registry();
+    let list = reg.lock().await;
+    list.iter()
+        .find(|(n, _): &&(String, u16)| n == name)
+        .map(|(_, p)| *p)
+}
+
+/// cheap liveness probe: is the cdp port still accepting tcp connections?
+async fn session_alive(port: u16) -> bool {
+    tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok()
+}
+
+/// reuse a live session when one exists; otherwise spawn an isolated chrome
+/// instance with a dedicated per-account user-data-dir. never touches the
+/// user's personal chrome profile. no automation-warning suppression flags.
+async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
+    if let Some(port) = live_session_port(name).await {
+        if session_alive(port).await {
+            return Ok(port); // reuse, no duplicate spawn
+        }
+        // stale registry entry, drop it before relaunching
+        let reg = server::sessions_registry();
+        let mut list = reg.lock().await;
+        list.retain(|(n, _): &(String, u16)| n != name);
+    }
+
+    let chrome_path = ctx.cfg.lock().unwrap().chrome_path.clone();
+    let accounts_dir = ctx.paths.accounts.clone();
+    let owned = name.to_string();
     let handle = tauri::async_runtime::spawn(async move {
         let sm = blastwa_core::browser::cdp_client::SessionManager::new(accounts_dir, chrome_path);
         let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
-        sm.launch(&name, port).await.map(|_| port).map_err(|e| e.to_string())
+        sm.launch(&owned, port).await.map(|_| port).map_err(|e| e.to_string())
     });
     handle.await.map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
-async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
-    let chrome_path = ctx.cfg.lock().unwrap().chrome_path.clone();
-    let accounts_dir = ctx.paths.accounts.clone();
-    let port = launch_session(chrome_path, accounts_dir, name.clone()).await?;
+async fn register_live_session(name: &str, port: u16) {
     let reg = server::sessions_registry();
     let mut list = reg.lock().await;
-    if !list.iter().any(|(n, _): &(String, u16)| n == &name) {
-        list.push((name.clone(), port));
+    if !list.iter().any(|(n, _): &(String, u16)| n == name) {
+        list.push((name.to_string(), port));
     }
-    Ok(serde_json::json!({ "ok": true, "name": name, "port": port }))
 }
 
 #[tauri::command]
-async fn remove_account(name: String) -> Result<serde_json::Value, String> {
+async fn list_accounts(ctx: State<'_, AppCtx>) -> Result<Vec<serde_json::Value>, String> {
+    // identities come from disk; port/connected come from the live registry.
+    // an account restored from storage shows connected: false until
+    // Open Browser (or Add Account) brings its session back.
+    let app_dir = AppConfig::app_dir();
+    let saved = server::load_saved_accounts(&app_dir);
     let reg = server::sessions_registry();
-    let mut list = reg.lock().await;
-    list.retain(|(n, _): &(String, u16)| n != &name);
+    let live = reg.lock().await;
+
+    let mut out = Vec::new();
+    for name in &saved {
+        let session = live.iter().find(|(n, _): &&(String, u16)| n == name);
+        out.push(serde_json::json!({
+            "name": name,
+            "port": session.map(|(_, p)| p),
+            "connected": session.is_some(),
+        }));
+    }
+    // live-only sessions (e.g. launched via rest pipeline) still show up
+    for (n, p) in live.iter() {
+        if !saved.contains(n) {
+            out.push(serde_json::json!({ "name": n, "port": p, "connected": true }));
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    let name = name.trim().to_string();
+    validate_account_name(&name)?;
+
+    // identity is configuration: persist it first, independent of whether
+    // the chrome session manages to start
+    let app_dir = AppConfig::app_dir();
+    server::save_account_name(&app_dir, &name)
+        .map_err(|e| format!("saving account: {e}"))?;
+
+    // session launch is best effort; failure is reported as a warning,
+    // the saved account can be opened later via Open Browser
+    let mut warning = None;
+    let mut port = None;
+    match live_session_port(&name).await {
+        Some(p) if session_alive(p).await => port = Some(p),
+        _ => match launch_session(&ctx, &name).await {
+            Ok(p) => port = Some(p),
+            Err(e) => {
+                log::warn!("add_account {name}: session launch failed: {e}");
+                warning = Some(format!(
+                    "Account saved, but its Chrome session could not start: {e}. Use Open Browser to retry."
+                ));
+            }
+        },
+    }
+
+    if let Some(p) = port {
+        register_live_session(&name, p).await;
+    }
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "name": name,
+        "port": port,
+        "connected": port.is_some(),
+        "warning": warning,
+    }))
+}
+
+#[tauri::command]
+async fn remove_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    // drop live session entry
+    let reg = server::sessions_registry();
+    {
+        let mut list = reg.lock().await;
+        list.retain(|(n, _): &(String, u16)| n != &name);
+    }
+    // drop saved identity
+    let app_dir = AppConfig::app_dir();
+    server::remove_saved_account(&app_dir, &name)
+        .map_err(|e| format!("removing account: {e}"))?;
     Ok(serde_json::json!({ "ok": true }))
 }
 
 #[tauri::command]
 async fn open_browser(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
-    let chrome_path = ctx.cfg.lock().unwrap().chrome_path.clone();
-    let accounts_dir = ctx.paths.accounts.clone();
-    let port = launch_session(chrome_path, accounts_dir, name.clone()).await?;
+    validate_account_name(&name)?;
+    let port = launch_session(&ctx, &name).await?;
+    register_live_session(&name, port).await;
     Ok(serde_json::json!({ "ok": true, "port": port }))
 }
 

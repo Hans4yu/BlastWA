@@ -1,6 +1,7 @@
 // local REST API server (U14): axum bound to 127.0.0.1 only.
 // lets external systems trigger blasts without opening the UI.
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -118,6 +119,42 @@ pub fn sessions_registry() -> Arc<tokio::sync::Mutex<Vec<(String, u16)>>> {
     LIVE_SESSIONS
         .get_or_init(|| Arc::new(tokio::sync::Mutex::new(Vec::new())))
         .clone()
+}
+
+// ---------- persistent account identity store ----------
+// only account names live on disk. cdp ports, connected flags, and browser
+// sessions are runtime state and stay in the in-memory registry above.
+
+pub fn accounts_file(app_dir: &Path) -> PathBuf {
+    app_dir.join("accounts.json")
+}
+
+/// account identities saved on disk; empty when missing or corrupt
+pub fn load_saved_accounts(app_dir: &Path) -> Vec<String> {
+    let path = accounts_file(app_dir);
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    serde_json::from_str(&raw).unwrap_or_else(|e| {
+        log::warn!("accounts.json unreadable ({}), starting from empty list", e);
+        Vec::new()
+    })
+}
+
+pub fn save_account_name(app_dir: &Path, name: &str) -> std::io::Result<()> {
+    let mut names = load_saved_accounts(app_dir);
+    if !names.iter().any(|n| n == name) {
+        names.push(name.to_string());
+    }
+    std::fs::create_dir_all(app_dir)?;
+    std::fs::write(accounts_file(app_dir), serde_json::to_string_pretty(&names)?)
+}
+
+pub fn remove_saved_account(app_dir: &Path, name: &str) -> std::io::Result<()> {
+    let mut names = load_saved_accounts(app_dir);
+    names.retain(|n| n != name);
+    std::fs::create_dir_all(app_dir)?;
+    std::fs::write(accounts_file(app_dir), serde_json::to_string_pretty(&names)?)
 }
 
 async fn accounts(

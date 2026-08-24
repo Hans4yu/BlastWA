@@ -1,17 +1,45 @@
 // BlastWA router + Tauri IPC helpers. vanilla js, no build step.
 // shell: menubar + toolbar + content + statusbar (oke sender-style chrome).
+//
+// page script lifecycle: pages are injected via innerHTML, which per HTML5
+// spec does NOT execute <script> tags. route() therefore re-creates each
+// script element (executing them in document order), then calls the page's
+// init_<page>() exactly once per load. per-page listeners registered through
+// blastwa.listen() are tracked and cleaned up on the next navigation so
+// repeated navigation cannot accumulate duplicates.
 
 const isTauri = !!window.__TAURI__;
 export const invoke = window.__TAURI__
   ? window.__TAURI__.core.invoke
   : async (cmd, args = {}) => ({ mock: true, cmd, args });
 
+// ----- page-scoped listener lifecycle -----
+
+let navEpoch = 0;          // increments on every navigation
+let pageCleanups = [];     // unlisten fns for the CURRENT page only
+
+function runPageCleanups() {
+  for (const fn of pageCleanups) {
+    try { fn(); } catch (e) { console.warn('page cleanup failed', e); }
+  }
+  pageCleanups = [];
+}
+
 export async function listen(event, handler) {
   if (isTauri && window.__TAURI__.event) {
-    await window.__TAURI__.event.listen(event, handler);
-  } else {
-    console.log(`[mock listen] ${event}`, 'handler registered');
+    const epoch = navEpoch;
+    const unlisten = await window.__TAURI__.event.listen(event, handler);
+    if (epoch === navEpoch) {
+      // still on the page that asked for it: clean up on next navigation
+      pageCleanups.push(() => { try { unlisten(); } catch (e) {} });
+    } else {
+      // user navigated away before registration finished: drop immediately
+      try { unlisten(); } catch (e) {}
+    }
+    return unlisten;
   }
+  console.log(`[mock listen] ${event}`, 'handler registered');
+  return () => {};
 }
 
 const PAGES = [
@@ -33,14 +61,41 @@ async function route() {
   const page = PAGES.includes(hash) ? hash : 'dashboard';
   setActive(page);
 
+  // new navigation: invalidate in-flight listener registrations and
+  // release the previous page's event listeners
+  navEpoch++;
+  runPageCleanups();
+
   try {
     const res = await fetch(`pages/${page}.html`);
-    contentEl.innerHTML = await res.text();
+    const html = await res.text();
+    contentEl.innerHTML = html;
     contentEl.scrollTop = 0;
 
-    // per-page init hook if defined by that page's script tag
+    // innerHTML marks injected <script> tags as already-started, so they
+    // never run. re-create each one as a fresh script element; appending
+    // to the DOM executes it synchronously, preserving document order.
+    for (const old of [...contentEl.querySelectorAll('script')]) {
+      const s = document.createElement('script');
+      if (old.src) {
+        s.src = old.src;
+      } else {
+        s.textContent = old.textContent;
+      }
+      document.body.appendChild(s);
+      old.remove(); // executed copy lives in body; keep content clean
+    }
+
+    // init hook: exactly once per page load. an init failure must not
+    // wipe the already-rendered page.
     const initFn = window[`init_${page}`];
-    if (typeof initFn === 'function') initFn();
+    if (typeof initFn === 'function') {
+      try {
+        await initFn();
+      } catch (e) {
+        console.error(`init_${page} failed:`, e);
+      }
+    }
   } catch (e) {
     contentEl.innerHTML = `<div class="empty-state">Failed to load page: ${e.message}</div>`;
   }
@@ -98,7 +153,7 @@ menubar.addEventListener('mouseover', (ev) => {
   }
 });
 
-// ----- status bar updater -----
+// ----- status bar updater (module scope: created exactly once) -----
 async function refreshStatus() {
   const $ = (id) => document.getElementById(id);
   try {
