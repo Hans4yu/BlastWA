@@ -19,6 +19,7 @@
       <div class="field">
         <label>Attachment (image / pdf / video / audio)</label>
         <input type="file" id="attachment" />
+        <span id="attachment-name" class="mono" style="font-size:12px;color:#0e7c7b"></span>
       </div>
       <div class="field" style="margin-bottom:0">
         <label>Caption (for attachments)</label>
@@ -95,6 +96,61 @@
     const { invoke, listen } = window.blastwa;
     const $ = (id) => document.getElementById(id);
 
+    // draft persistence: route() rebuilds this page on every navigation, so
+    // the compose state lives in localStorage and is restored on init
+    const DRAFT_KEY = 'blastwa.draft.sending';
+    const draftFields = ['msg-body', 'caption', 'account-select', 'delay-min',
+      'delay-max', 'human-preset', 'safe-mode'];
+    let attachmentPath = null;
+
+    function saveDraft() {
+      const d = { attachmentPath };
+      for (const id of draftFields) {
+        d[id] = $(id).type === 'checkbox' ? $(id).checked : $(id).value;
+      }
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}
+    }
+
+    function restoreDraft() {
+      let d;
+      try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) { return; }
+      if (!d) return;
+      for (const id of draftFields) {
+        if (d[id] === undefined) continue;
+        if ($(id).type === 'checkbox') $(id).checked = d[id];
+        else if ($(id).tagName === 'SELECT' && !$(id).querySelector(`option[value="${d[id]}"]`)) continue;
+        else $(id).value = d[id];
+      }
+      attachmentPath = d.attachmentPath || null;
+      if (attachmentPath) {
+        $('attachment-name').textContent = attachmentPath.split(/[\/]/).pop();
+      }
+    }
+
+    for (const id of draftFields) {
+      $(id).addEventListener('input', saveDraft);
+      $(id).addEventListener('change', saveDraft);
+    }
+
+    // tauri v2 hides the real path from <input type=file>, so intercept the
+    // picker and use the dialog plugin (browser dev keeps the native input)
+    $('attachment').addEventListener('click', (e) => {
+      const tauriDialog = window.__TAURI__ && window.__TAURI__.dialog;
+      if (!tauriDialog) return;
+      e.preventDefault();
+      tauriDialog.open({
+        multiple: false,
+        title: 'Choose attachment',
+        filters: [{ name: 'Media', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif',
+          'pdf', 'mp4', 'mkv', 'webm', 'avi', 'mp3', 'wav', 'ogg', 'opus', 'weba'] }],
+      }).then((path) => {
+        if (!path) return;
+        attachmentPath = path;
+        $('attachment-name').textContent = path.split(/[\/]/).pop();
+        saveDraft();
+      }).catch(() => {});
+    });
+
     const contacts = await invoke('get_contacts');
     const count = Array.isArray(contacts) ? contacts.length : (contacts.count ?? 0);
     $('contact-count').innerHTML = `<b>${count}</b> contacts loaded`;
@@ -107,12 +163,16 @@
         .join('');
     }
 
+    restoreDraft();
+
     $('btn-start').onclick = () => invoke('start_campaign', {
       message: $('msg-body').value,
       account: $('account-select').value,
       delayMinS: Number($('delay-min').value),
       delayMaxS: Number($('delay-max').value),
       humanPreset: $('human-preset').value,
+      attachmentPath: attachmentPath,
+      caption: $('caption').value || null,
       isSafeMode: $('safe-mode').checked,
     });
 
