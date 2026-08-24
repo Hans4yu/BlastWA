@@ -189,8 +189,9 @@ async fn probe_account_state(
                     drop(boot);
                     let pipeline = ctx.pipeline.clone();
                     let account = name.to_string();
+                    let page = page.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Err(e) = pipeline.ensure_wpp_for(&account).await {
+                        if let Err(e) = pipeline.ensure_wpp_for(&account, page).await {
                             log::warn!("wpp bootstrap for number identity failed: {e:#}");
                         }
                     });
@@ -204,9 +205,39 @@ async fn probe_account_state(
             (true, auth, number)
         }
         Err(_) => {
-            // evaluate failed: page or cdp is gone
-            let mut cache = ctx.auth_cache.lock().unwrap();
-            cache.remove(name);
+            // evaluate failed: the cached handle's cdp socket died. evict and
+            // try one fresh attach before concluding the browser is gone.
+            ctx.auth_cache.lock().unwrap().remove(name);
+            ctx.pipeline.evict_page(name).await;
+            if let Some(port) = live_session_port(name).await {
+                if let Ok(fresh) = ctx.pipeline.attach(name, port).await {
+                    let inj = blastwa_core::browser::js_injector::JsInjector::new(&fresh);
+                    if let Ok(auth) = inj.is_logged_in().await {
+                        let number = if auth {
+                            inj.my_user_id().await.ok().filter(|s| !s.is_empty())
+                        } else {
+                            None
+                        };
+                        ctx.auth_cache.lock().unwrap().insert(
+                            name.to_string(),
+                            (std::time::Instant::now(), auth, number.clone()),
+                        );
+                        if auth && number.is_none() {
+                            let pipeline = ctx.pipeline.clone();
+                            let account = name.to_string();
+                            let page = fresh.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Err(e) =
+                                    pipeline.ensure_wpp_for(&account, page).await
+                                {
+                                    log::warn!("wpp bootstrap after reconnect failed: {e:#}");
+                                }
+                            });
+                        }
+                        return (true, auth, number);
+                    }
+                }
+            }
             (false, false, None)
         }
     }

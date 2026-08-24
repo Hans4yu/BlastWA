@@ -154,10 +154,21 @@ impl Pipeline {
         v.into_value::<String>().ok()
     }
 
+    /// drop a cached page handle (dead cdp connection) and its wpp memo,
+    /// so the next access re-attaches fresh
+    pub async fn evict_page(&self, name: &str) {
+        self.pages.lock().await.remove(name);
+        self.wpp_ready.lock().await.remove(name);
+    }
+
     /// guarantee wpp is available on an account's page. serialized globally
     /// and memoized per account: concurrent injections of the ~1mb bundle on
     /// the same target reset the cdp websocket ("cdp evaluate failed").
-    pub async fn ensure_wpp_for(&self, account: &str) -> anyhow::Result<()> {
+    pub async fn ensure_wpp_for(
+        &self,
+        account: &str,
+        page: chromiumoxide::Page,
+    ) -> anyhow::Result<()> {
         if self.wpp_ready.lock().await.contains(account) {
             return Ok(());
         }
@@ -165,10 +176,6 @@ impl Pipeline {
         if self.wpp_ready.lock().await.contains(account) {
             return Ok(());
         }
-        let page = self
-            .page_handle(account)
-            .await
-            .ok_or_else(|| anyhow::anyhow!("no live page for account {account}"))?;
         let mut injector = JsInjector::new(&page);
         let wpp_local = std::path::Path::new(&crate::config::settings::AppConfig::app_dir())
             .join("wpp")
@@ -186,26 +193,26 @@ impl Pipeline {
         &self,
         account: &str,
     ) -> anyhow::Result<crate::browser::js_injector::JsInjector> {
-        let page = match self.page_handle(account).await {
-            Some(p) => p,
-            None => {
-                let reg = crate::api::server::sessions_registry();
-                let port = reg
-                    .lock()
-                    .await
-                    .iter()
-                    .find(|x| x.0 == account)
-                    .map(|x| x.1);
-                let Some(port) = port else {
-                    anyhow::bail!(
-                        "no running browser for account {account} - open it from the dashboard first"
-                    );
-                };
-                self.attach(account, port).await?
-            }
+        // attach() health-checks the cached handle and reconnects when the
+        // underlying cdp socket died (chrome resets those occasionally)
+        let reg = crate::api::server::sessions_registry();
+        let port = reg
+            .lock()
+            .await
+            .iter()
+            .find(|x| x.0 == account)
+            .map(|x| x.1);
+        let page = if let Some(port) = port {
+            self.attach(account, port).await?
+        } else if let Some(p) = self.page_handle(account).await {
+            p
+        } else {
+            anyhow::bail!(
+                "no running browser for account {account} - open it from the dashboard first"
+            );
         };
 
-        self.ensure_wpp_for(account).await?;
+        self.ensure_wpp_for(account, page.clone()).await?;
         Ok(JsInjector::new(&page))
     }
 
@@ -281,6 +288,8 @@ impl Pipeline {
             .await
             .context("opening whatsapp web tab")?;
         pages.insert(account.to_string(), page.clone());
+        // fresh tab: previous wpp memo no longer applies
+        self.wpp_ready.lock().await.remove(account);
         Ok(page)
     }
 
