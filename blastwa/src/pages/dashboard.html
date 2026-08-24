@@ -37,6 +37,11 @@
 <script>
   window.init_dashboard = async function () {
     await renderAccounts();
+
+    // live status: re-render every 3s so scan -> connected transitions show
+    // without needing to switch tabs; interval is cleaned up on navigation
+    const poll = setInterval(() => { renderAccounts().catch(() => {}); }, 3000);
+    window.blastwa.addCleanup(() => clearInterval(poll));
   };
 
   function esc(s) {

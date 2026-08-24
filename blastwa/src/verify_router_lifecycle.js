@@ -46,6 +46,7 @@ function makeWindow() {
     blastwa: {
       invoke: async () => ({ mock: true }),
       listen: async () => () => {},
+      addCleanup: () => {},
       isTauri: false,
     },
   };

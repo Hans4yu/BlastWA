@@ -55,6 +55,12 @@ function runPageCleanups() {
   pageCleanups = [];
 }
 
+// register any page-scoped teardown (e.g. clearing an interval) that should
+// run when the current page is navigated away from
+export function addCleanup(fn) {
+  if (typeof fn === 'function') pageCleanups.push(fn);
+}
+
 export async function listen(event, handler) {
   if (isTauri && window.__TAURI__.event) {
     const epoch = navEpoch;
@@ -226,4 +232,4 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // shared helpers usable by pages
-window.blastwa = { invoke, listen, isTauri };
+window.blastwa = { invoke, listen, isTauri, addCleanup };
