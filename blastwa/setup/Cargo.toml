@@ -1,5 +1,5 @@
 [package]
-name = "blastwa-setup"
+name = "blastwa-init"
 version.workspace = true
 edition.workspace = true
 
