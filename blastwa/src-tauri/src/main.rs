@@ -33,6 +33,8 @@ struct AppCtx {
     templates: TemplateLibrary,
     /// short-lived wa-auth probe cache: name -> (probed_at, authenticated, number)
     auth_cache: Arc<Mutex<HashMap<String, (std::time::Instant, bool, Option<String>)>>>,
+    /// accounts for which a one-shot wpp bootstrap was already kicked off
+    wpp_bootstrapped: Arc<Mutex<HashMap<String, bool>>>,
 }
 
 // ---------- accounts ----------
@@ -86,9 +88,14 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
     let handle = tauri::async_runtime::spawn(async move {
         let sm = blastwa_core::browser::cdp_client::SessionManager::new(accounts_dir, chrome_path);
         let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
-        sm.launch(&owned, port).await.map(|_| port).map_err(|e| e.to_string())
+        // ok(None) = spawn attached to an already-running chrome instance, so
+        // the port we passed never opened. discovery below finds the real one.
+        sm.launch(&owned, port).await.map(|_| port).ok()
     });
-    handle.await.map_err(|e| e.to_string())?
+    let spawned_port: Option<u16> = handle.await.map_err(|e| e.to_string())?;
+    blastwa_core::browser::cdp_client::discover_wa_port(spawned_port)
+        .await
+        .ok_or_else(|| "chrome cdp endpoint not found after launch".to_string())
 }
 
 async fn register_live_session(name: &str, port: u16) {
@@ -161,7 +168,7 @@ async fn probe_account_state(
     let injector = blastwa_core::browser::js_injector::JsInjector::new(&page);
     match injector.is_logged_in().await {
         Ok(auth) => {
-            let number = if auth {
+            let mut number = if auth {
                 injector
                     .my_user_id()
                     .await
@@ -170,6 +177,27 @@ async fn probe_account_state(
             } else {
                 None
             };
+            // authenticated but no identity yet: modern wa web keeps the wid
+            // out of localStorage, so kick off a one-shot wpp bootstrap and
+            // let the next poll pick the number up via WPP.conn.getMyUserId()
+            if auth && number.is_none() {
+                let mut boot = ctx.wpp_bootstrapped.lock().unwrap();
+                if !boot.get(name).copied().unwrap_or(false) {
+                    boot.insert(name.to_string(), true);
+                    drop(boot);
+                    let wpp_local = AppConfig::app_dir()
+                        .join("wpp")
+                        .join("wpp.js");
+                    let code = std::fs::read_to_string(&wpp_local).ok();
+                    let page = page.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let mut inj = blastwa_core::browser::js_injector::JsInjector::new(&page);
+                        if let Err(e) = inj.ensure_wpp(code.as_deref()).await {
+                            log::warn!("wpp bootstrap for number identity failed: {e:#}");
+                        }
+                    });
+                }
+            }
             let mut cache = ctx.auth_cache.lock().unwrap();
             cache.insert(
                 name.to_string(),
@@ -247,6 +275,11 @@ async fn open_browser(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json
     validate_account_name(&name)?;
     let port = launch_session(&ctx, &name).await?;
     register_live_session(&name, port).await;
+    // attach the wa tab so the status probe can observe auth state
+    ctx.pipeline
+        .attach(&name, port)
+        .await
+        .map_err(|e| format!("browser launched but cdp attach failed: {e:#}"))?;
     Ok(serde_json::json!({ "ok": true, "port": port }))
 }
 
@@ -669,6 +702,7 @@ fn main() {
         logs: Arc::new(Mutex::new(Vec::new())),
         templates,
         auth_cache: Arc::new(Mutex::new(HashMap::new())),
+        wpp_bootstrapped: Arc::new(Mutex::new(HashMap::new())),
     };
 
     tauri::Builder::default()

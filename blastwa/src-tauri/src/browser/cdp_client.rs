@@ -85,6 +85,44 @@ impl SessionManager {
     }
 }
 
+/// discover the real listening cdp endpoint after a chrome launch.
+/// needed because when chrome is already running with the same user-data-dir,
+/// a new spawn attaches to the existing process and the port we passed is
+/// never opened. scans the candidate port first, then the usual range,
+/// preferring endpoints that currently host a web.whatsapp.com tab.
+pub async fn discover_wa_port(candidate: Option<u16>) -> Option<u16> {
+    let mut ports = Vec::new();
+    if let Some(c) = candidate {
+        ports.push(c);
+    }
+    ports.extend(9222..=9241);
+
+    let mut any_alive: Option<u16> = None;
+    for p in ports {
+        if tokio::net::TcpStream::connect(("127.0.0.1", p)).await.is_err() {
+            continue;
+        }
+        if has_whatsapp_target(p).await {
+            return Some(p);
+        }
+        if any_alive.is_none() {
+            any_alive = Some(p);
+        }
+    }
+    any_alive
+}
+
+async fn has_whatsapp_target(port: u16) -> bool {
+    let url = format!("http://127.0.0.1:{port}/json/list");
+    let Ok(body) = reqwest::get(&url).await else {
+        return false;
+    };
+    let Ok(text) = body.text().await else {
+        return false;
+    };
+    text.contains("web.whatsapp.com")
+}
+
 /// find a free tcp port starting from `start`
 pub async fn find_free_port(start: u16) -> u16 {
     for p in start..start + 100 {

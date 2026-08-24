@@ -154,6 +154,53 @@ impl Pipeline {
         pages.get(name).cloned()
     }
 
+    /// attach to an already-running chrome (e.g. opened via the dashboard)
+    /// without waiting for login. finds the existing web.whatsapp.com tab or
+    /// opens one, and stores the handle so status probes can observe it.
+    pub async fn attach(&self, account: &str, port: u16) -> anyhow::Result<chromiumoxide::Page> {
+        let mut pages = self.pages.lock().await;
+
+        // reuse a handle that still evaluates
+        if let Some(page) = pages.get(account) {
+            if JsInjector::new(page).is_logged_in().await.is_ok() {
+                return Ok(page.clone());
+            }
+            pages.remove(account);
+        }
+
+        let (browser, mut handler) =
+            chromiumoxide::browser::Browser::connect(format!("http://127.0.0.1:{port}"))
+                .await
+                .with_context(|| format!("attaching to chrome cdp on port {port}"))?;
+        let handler_task = tokio::spawn(async move {
+            use futures::StreamExt;
+            while let Some(event) = handler.next().await {
+                if event.is_err() {
+                    break;
+                }
+            }
+        });
+        // keep the handler alive for the lifetime of the app
+        std::mem::forget(handler_task);
+
+        // prefer an existing whatsapp web tab over opening a fresh one
+        for p in browser.pages().await.unwrap_or_default() {
+            if let Ok(Some(url)) = p.url().await {
+                if url.contains("web.whatsapp.com") {
+                    pages.insert(account.to_string(), p.clone());
+                    return Ok(p);
+                }
+            }
+        }
+
+        let page = browser
+            .new_page("https://web.whatsapp.com")
+            .await
+            .context("opening whatsapp web tab")?;
+        pages.insert(account.to_string(), page.clone());
+        Ok(page)
+    }
+
     /// public entry for gui commands: session + wpp bootstrap in one call
     pub async fn get_injector(&self, account: &str) -> Result<crate::browser::js_injector::JsInjector> {
         let page = self.get_page(account).await?;
