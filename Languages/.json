@@ -1,0 +1,1670 @@
+[
+  {
+    "Key": "FrmAdd.BtnOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmAdd.BtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmAdd.Label1",
+    "Text": "الرقم الدولي"
+  },
+  {
+    "Key": "FrmAdd",
+    "Text": "أضف رمز البلد"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountBtnOk",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountBtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountLabel1",
+    "Text": "رقم حساب Whatsapp"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountLabel2",
+    "Text": "يرجى التأكد من أن الحساب الذي تضيفه هو حساب whatsapp وأنه يتلقى رسائل منك"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountText",
+    "Text": "إضافة حساب Whatsapp Familiar"
+  },
+  {
+    "Key": "FrmAdd.MessageBtnOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmAdd.MessageBtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmAdd.MessageLabel1",
+    "Text": "رسالة"
+  },
+  {
+    "Key": "FrmAdd.MessageText",
+    "Text": "اضافة رسالة"
+  },
+  {
+    "Key": "FrmAdvanced.BtnAddFamiliarAccount",
+    "Text": "أضف"
+  },
+  {
+    "Key": "FrmAdvanced.BtnDeleteFamiliarAccount",
+    "Text": "حذف"
+  },
+  {
+    "Key": "FrmAdvanced.BtnAddMessages",
+    "Text": "أضف"
+  },
+  {
+    "Key": "FrmAdvanced.BtnDeleteMessages",
+    "Text": "حذف"
+  },
+  {
+    "Key": "FrmAdvanced.Label2",
+    "Text": "إلى عن على:"
+  },
+  {
+    "Key": "FrmAdvanced.Label10",
+    "Text": "الرسائل"
+  },
+  {
+    "Key": "FrmAdvanced.Label3",
+    "Text": "الثواني"
+  },
+  {
+    "Key": "FrmAdvanced.Label1",
+    "Text": "بعد:"
+  },
+  {
+    "Key": "FrmAdvanced.Label7",
+    "Text": "حسابات Whatsapp الشائعة"
+  },
+  {
+    "Key": "FrmAdvanced.Label8",
+    "Text": "قاموس الرسائل"
+  },
+  {
+    "Key": "FrmAdvanced.Button5",
+    "Text": "قريب"
+  },
+  {
+    "Key": "FrmAdvanced.CheckBox2",
+    "Text": "تنشيط النوم بين الإرسال"
+  },
+  {
+    "Key": "FrmAdvanced.GroupBox4",
+    "Text": "التأخير بين الرسائل"
+  },
+  {
+    "Key": "FrmAdvanced.Label12",
+    "Text": "الثواني"
+  },
+  {
+    "Key": "FrmAdvanced.Label14",
+    "Text": "و"
+  },
+  {
+    "Key": "FrmAdvanced.Label11",
+    "Text": "الثواني"
+  },
+  {
+    "Key": "FrmAdvanced.WaitFrom2",
+    "Text": "انتظر بين:"
+  },
+  {
+    "Key": "FrmAdvanced.GroupBox5",
+    "Text": "سرعة الاتصال"
+  },
+  {
+    "Key": "FrmAdvanced.TabPage1",
+    "Text": "الإتصال"
+  },
+  {
+    "Key": "FrmAdvanced.TabPage2",
+    "Text": "إرسال الإعدادات"
+  },
+  {
+    "Key": "FrmAdvanced.TabPage3",
+    "Text": "إرسال ودية"
+  },
+  {
+    "Key": "FrmAdvanced.CheckBox1",
+    "Text": "تنشيط الحوار الودي"
+  },
+  {
+    "Key": "FrmAdvanced.Label13",
+    "Text": "العدد:"
+  },
+  {
+    "Key": "FrmAdvanced.Label4",
+    "Text": "الرسائل"
+  },
+  {
+    "Key": "FrmAdvanced.Label5",
+    "Text": "بعد:"
+  },
+  {
+    "Key": "FrmAdvanced.Label15",
+    "Text": "لاحظ أنه: يعمل فقط مع الوضع الأعمى"
+  },
+  {
+    "Key": "FrmAdvanced",
+    "Text": "إرسال الإعدادات"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonClear",
+    "Text": "واضح"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonDelete",
+    "Text": "حذف"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonAdd",
+    "Text": "أضف"
+  },
+  {
+    "Key": "FrmAutoReply.LabelAttachment",
+    "Text": "المرفق"
+  },
+  {
+    "Key": "FrmAutoReply.LabelMessage",
+    "Text": "رسالة"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmAutoReply.ColumnHeader1",
+    "Text": "اسم الملف"
+  },
+  {
+    "Key": "FrmAutoReply.ColumnHeader2",
+    "Text": "نوع"
+  },
+  {
+    "Key": "FrmAutoReply.ColumnHeader3",
+    "Text": "شرح"
+  },
+  {
+    "Key": "FrmAutoReply.SetCaptionToolStripMenuItem",
+    "Text": "تعيين تسمية توضيحية"
+  },
+  {
+    "Key": "FrmAutoReply.DeleteToolStripMenuItem1",
+    "Text": "حذف ملف"
+  },
+  {
+    "Key": "FrmAutoReply.OpenFileToolStripMenuItem",
+    "Text": "افتح ملف"
+  },
+  {
+    "Key": "FrmAutoReply.PhotosToolStripMenuItem",
+    "Text": "الصور"
+  },
+  {
+    "Key": "FrmAutoReply.VideosToolStripMenuItem",
+    "Text": "أشرطة فيديو"
+  },
+  {
+    "Key": "FrmAutoReply.DocumentsToolStripMenuItem",
+    "Text": "مستندات"
+  },
+  {
+    "Key": "FrmAutoReply.StickersToolStripMenuItem",
+    "Text": "صورة كملصقات"
+  },
+  {
+    "Key": "FrmAutoReply",
+    "Text": "رسالة رد تلقائي"
+  },
+  {
+    "Key": "FrmBrowser",
+    "Text": "ال WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader1",
+    "Text": "اسم"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader2",
+    "Text": "رقم"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader3",
+    "Text": "نوع"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader4",
+    "Text": "الحالة"
+  },
+  {
+    "Key": "FrmFilter.ButtonImportFromFile",
+    "Text": "الملفات"
+  },
+  {
+    "Key": "FrmFilter.ButtonManualImport",
+    "Text": "كتيب"
+  },
+  {
+    "Key": "FrmFilter.ButtonNumberGenerator",
+    "Text": "مولد الأرقام"
+  },
+  {
+    "Key": "FrmFilter.ButtonExport",
+    "Text": "تصدير"
+  },
+  {
+    "Key": "FrmFilter.Label4",
+    "Text": "مجموع:"
+  },
+  {
+    "Key": "FrmFilter.ExportAllToolStripMenuItem",
+    "Text": "تصدير الكل"
+  },
+  {
+    "Key": "FrmFilter.WhatsAppOnlyToolStripMenuItem",
+    "Text": "WhatsApp فقط"
+  },
+  {
+    "Key": "FrmFilter.BusinessWhatsAppToolStripMenuItem",
+    "Text": "WhatsApp للأعمال"
+  },
+  {
+    "Key": "FrmFilter.RegularWhatsAppToolStripMenuItem",
+    "Text": "WhatsApp عادي"
+  },
+  {
+    "Key": "FrmFilter.NonWhatsAppToolStripMenuItem",
+    "Text": "ليس WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.Button1",
+    "Text": "ابدأ الفحص"
+  },
+  {
+    "Key": "FrmFilter.ButtonStop",
+    "Text": "قف"
+  },
+  {
+    "Key": "FrmFilter.GroupBox1",
+    "Text": "تأخير"
+  },
+  {
+    "Key": "FrmFilter.Label1",
+    "Text": "ثانية"
+  },
+  {
+    "Key": "FrmFilter.Label8",
+    "Text": "ال WhatsApp:"
+  },
+  {
+    "Key": "FrmFilter.Label10",
+    "Text": "اعمال"
+  },
+  {
+    "Key": "FrmFilter.Label12",
+    "Text": "عادي:"
+  },
+  {
+    "Key": "FrmFilter.LabelRequestProgress",
+    "Text": "طلب التقدم"
+  },
+  {
+    "Key": "FrmFilter.LabelVerificationProgress",
+    "Text": "تقدم التحقق"
+  },
+  {
+    "Key": "FrmFilter.ButtonClear",
+    "Text": "واضح"
+  },
+  {
+    "Key": "FrmFilter.ButtonClose",
+    "Text": "قريب"
+  },
+  {
+    "Key": "FrmFilter.GroupBox2",
+    "Text": "استيراد"
+  },
+  {
+    "Key": "FrmFilter.ButtonImporttosender",
+    "Text": "استيراد إلى المرسل"
+  },
+  {
+    "Key": "FrmFilter.ImportAllWhatsAppToolStripMenuItem",
+    "Text": "استيراد جميع أرقام WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.ImportRegularWhatsAppToolStripMenuItem",
+    "Text": "استيراد WhatsApp العادي"
+  },
+  {
+    "Key": "FrmFilter.ImportBusinessWhatsAppToolStripMenuItem",
+    "Text": "استيراد واتس اب للأعمال"
+  },
+  {
+    "Key": "FrmFilter",
+    "Text": "مرشح أرقام WhatsApp"
+  },
+  {
+    "Key": "FrmImportFromFiles.BtnOpenDialog",
+    "Text": "تصفح"
+  },
+  {
+    "Key": "FrmImportFromFiles.BtnImport",
+    "Text": "استيراد"
+  },
+  {
+    "Key": "FrmImportFromFiles.BtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmImportFromFiles.LinkLabel1",
+    "Text": "عينات تنسيق الملفات"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBox1",
+    "Text": "إزالة الازدواجية"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBox2",
+    "Text": "الصف الأول كرأس"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label1",
+    "Text": "حقل الاسم"
+  },
+  {
+    "Key": "FrmImportFromFiles.GroupBox2",
+    "Text": "استيراد ملف"
+  },
+  {
+    "Key": "FrmImportFromFiles.LinkLabel2",
+    "Text": "انظر هنا ملفات تجريبية"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label9",
+    "Text": "لتجنب الأخطاء ، يرجى استيراد الملفات في الهيكل الصحيح ويجب أن تكون ملفات التنسيق"
+  },
+  {
+    "Key": "FrmImportFromFiles.GroupBox3",
+    "Text": "تعيين الحقول"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label2",
+    "Text": "حقل الرقم"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label3",
+    "Text": "حقل Var1"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label7",
+    "Text": "حقل Var5"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label4",
+    "Text": "حقل Var2"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label6",
+    "Text": "حقل Var4"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label5",
+    "Text": "حقل Var3"
+  },
+  {
+    "Key": "FrmImportFromFiles.GroupBox1",
+    "Text": "الإعدادات"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBoxDelimeter",
+    "Text": "محدد مخصص"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBoxRemoveDuplication",
+    "Text": "إزالة الازدواجية"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBoxFirstRow",
+    "Text": "استخدم الصف الأول كرأس"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label8",
+    "Text": "حدد ملفًا للاستيراد"
+  },
+  {
+    "Key": "FrmImportFromFiles",
+    "Text": "استيراد من ملف"
+  },
+  {
+    "Key": "FrmLanguage.LabelLanguage",
+    "Text": "اختار اللغة"
+  },
+  {
+    "Key": "FrmLanguage.BtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmLanguage.BtnOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmLanguage",
+    "Text": "لغة"
+  },
+  {
+    "Key": "FrmLicense.Label1",
+    "Text": "مفتاح الطلب"
+  },
+  {
+    "Key": "FrmLicense.Label2",
+    "Text": "يرجى إرسال مفتاح الطلب الخاص بك مع دليل المتابعة الخاص بك"
+  },
+  {
+    "Key": "FrmLicense.Label3",
+    "Text": "مفتاح الترخيص"
+  },
+  {
+    "Key": "FrmLicense.Button1",
+    "Text": "تفعيل"
+  },
+  {
+    "Key": "FrmLicense.Button2",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmLicense.Button3",
+    "Text": "نسخ"
+  },
+  {
+    "Key": "FrmLicense",
+    "Text": "تنشيط مرسل WhatsApp المجمع"
+  },
+  {
+    "Key": "FrmLog.MenuStrip1",
+    "Text": "MenuStrip1"
+  },
+  {
+    "Key": "FrmLog.FileToolStripMenuItem",
+    "Text": "&ملف"
+  },
+  {
+    "Key": "FrmLog.SaveLogToolStripMenuItem",
+    "Text": "احفظ الدخول"
+  },
+  {
+    "Key": "FrmLog.ExitToolStripMenuItem",
+    "Text": "خروج"
+  },
+  {
+    "Key": "FrmLog",
+    "Text": "سجل الرسائل"
+  },
+  {
+    "Key": "FrmLog.gingLabel1",
+    "Text": "جاري تسجيل الدخول ، يرجى الانتظار ..."
+  },
+  {
+    "Key": "FrmLog.gingText",
+    "Text": "FrmLog.ging"
+  },
+  {
+    "Key": "FrmMain.FF3",
+    "Text": "الواردات من الملفات"
+  },
+  {
+    "Key": "FrmMain.MM3",
+    "Text": "الواردات اليدوية"
+  },
+  {
+    "Key": "FrmMain.DeleteToolStripMenuItem",
+    "Text": "حذف"
+  },
+  {
+    "Key": "FrmMain.ClearListToolStripMenuItem",
+    "Text": "لائحة خالية"
+  },
+  {
+    "Key": "FrmMain.MnStripMain",
+    "Text": "MenuStrip1"
+  },
+  {
+    "Key": "FrmMain.FileToolStripMenuItem",
+    "Text": "&ملف"
+  },
+  {
+    "Key": "FrmMain.NewBulkToolStripMenuItem",
+    "Text": "كتلة جديدة"
+  },
+  {
+    "Key": "FrmMain.NewAutoReplyRuleToolStripMenuItem",
+    "Text": "قاعدة رد تلقائي جديدة"
+  },
+  {
+    "Key": "FrmMain.ImportNumbersToolStripMenuItem",
+    "Text": "أرقام الاستيراد"
+  },
+  {
+    "Key": "FrmMain.FF2",
+    "Text": "من الملفات"
+  },
+  {
+    "Key": "FrmMain.MM2",
+    "Text": "كتيب"
+  },
+  {
+    "Key": "FrmMain.WhatsAppContactsToolStripMenuItem",
+    "Text": "جهات اتصال WhatsApp"
+  },
+  {
+    "Key": "FrmMain.WhatsAppGroupsToolStripMenuItem",
+    "Text": "مجموعات WhatsApp"
+  },
+  {
+    "Key": "FrmMain.ImportMessageToolStripMenuItem",
+    "Text": "رسالة استيراد"
+  },
+  {
+    "Key": "FrmMain.ExportNumbersToolStripMenuItem",
+    "Text": "أرقام التصدير"
+  },
+  {
+    "Key": "FrmMain.SaveMessageToolStripMenuItem",
+    "Text": "حفظ الرسالة"
+  },
+  {
+    "Key": "FrmMain.ExitToolStripMenuItem",
+    "Text": "خروج"
+  },
+  {
+    "Key": "FrmMain.EditToolStripMenuItem",
+    "Text": "&تعديل"
+  },
+  {
+    "Key": "FrmMain.ClearNumbersListToolStripMenuItem",
+    "Text": "مسح قائمة الأرقام"
+  },
+  {
+    "Key": "FrmMain.ClearMessageToolStripMenuItem",
+    "Text": "رسالة واضحة"
+  },
+  {
+    "Key": "FrmMain.ClearLogToolStripMenuItem",
+    "Text": "سجل نظيف"
+  },
+  {
+    "Key": "FrmMain.ViewToolStripMenuItem",
+    "Text": "&رأي"
+  },
+  {
+    "Key": "FrmMain.SentCampaignsToolStripMenuItem",
+    "Text": "الحملات المرسلة"
+  },
+  {
+    "Key": "FrmMain.ReceivedMessageToolStripMenuItem",
+    "Text": "رسالة مستلمة"
+  },
+  {
+    "Key": "FrmMain.LogsToolStripMenuItem",
+    "Text": "السجلات"
+  },
+  {
+    "Key": "FrmMain.SettingsToolStripMenuItem1",
+    "Text": "الإعدادات"
+  },
+  {
+    "Key": "FrmMain.SendingSettingsToolStripMenuItem",
+    "Text": "إرسال الإعدادات"
+  },
+  {
+    "Key": "FrmMain.SetAutoReplyToolStripMenuItem1",
+    "Text": "قم بتعيين رد تلقائي"
+  },
+  {
+    "Key": "FrmMain.LanguagesToolStripMenuItem",
+    "Text": "اللغات"
+  },
+  {
+    "Key": "FrmMain.ThemesToolStripMenuItem",
+    "Text": "المظاهر"
+  },
+  {
+    "Key": "FrmMain.ToolsToolStripMenuItem",
+    "Text": "أدوات"
+  },
+  {
+    "Key": "FrmMain.NumberFilterToolStripMenuItem",
+    "Text": "مرشح WhatsAppNumber"
+  },
+  {
+    "Key": "FrmMain.VirtualNumbersToolStripMenuItem",
+    "Text": "أرقام افتراضية"
+  },
+  {
+    "Key": "FrmMain.HelpToolStripMenuItem",
+    "Text": "مساعدة"
+  },
+  {
+    "Key": "FrmMain.ViewHelpToolStripMenuItem",
+    "Text": "عرض مساعده"
+  },
+  {
+    "Key": "FrmMain.CheckForUpdateToolStripMenuItem",
+    "Text": "فحص التحديثات"
+  },
+  {
+    "Key": "FrmMain.UpdateLicenseToolStripMenuItem",
+    "Text": "تحديث الترخيص"
+  },
+  {
+    "Key": "FrmMain.AboutToolStripMenuItem",
+    "Text": "حول"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader3",
+    "Text": "اسم الملف"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader4",
+    "Text": "نوع"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader5",
+    "Text": "شرح"
+  },
+  {
+    "Key": "FrmMain.SetCaptionToolStripMenuItem",
+    "Text": "تعيين تسمية توضيحية"
+  },
+  {
+    "Key": "FrmMain.DeleteToolStripMenuItem1",
+    "Text": "حذف ملف"
+  },
+  {
+    "Key": "FrmMain.OpenFileToolStripMenuItem",
+    "Text": "افتح ملف"
+  },
+  {
+    "Key": "FrmMain.Button2",
+    "Text": "واضح"
+  },
+  {
+    "Key": "FrmMain.Label17",
+    "Text": "إرفاق الملفات والصور"
+  },
+  {
+    "Key": "FrmMain.BtnImgBrowse",
+    "Text": "أضف الملفات أو الصور"
+  },
+  {
+    "Key": "FrmMain.BtnSending",
+    "Text": "ارسل الان"
+  },
+  {
+    "Key": "FrmMain.HeadarPanel",
+    "Text": "إرسال السجل"
+  },
+  {
+    "Key": "FrmMain.Label10",
+    "Text": "رسالة"
+  },
+  {
+    "Key": "FrmMain.ButtonOpenWhatsApp",
+    "Text": "افتح تطبيق WhatsApp"
+  },
+  {
+    "Key": "FrmMain.Button10",
+    "Text": "الواردات"
+  },
+  {
+    "Key": "FrmMain.Button11",
+    "Text": "صادرات"
+  },
+  {
+    "Key": "FrmMain.Button12",
+    "Text": "واضح"
+  },
+  {
+    "Key": "FrmMain.FF1",
+    "Text": "استيراد من ملف"
+  },
+  {
+    "Key": "FrmMain.MM1",
+    "Text": "الواردات اليدوية"
+  },
+  {
+    "Key": "FrmMain.ImportFromWhatsAppContactsToolStripMenuItem",
+    "Text": "استيراد من جهات اتصال WhatsApp"
+  },
+  {
+    "Key": "FrmMain.ImportFromWhatsAppGroupsToolStripMenuItem",
+    "Text": "استيراد من مجموعات WhatsApp"
+  },
+  {
+    "Key": "FrmMain.LblNumbers",
+    "Text": "أرقام واتس اب"
+  },
+  {
+    "Key": "FrmMain.ClnNumber",
+    "Text": "اسم"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader2",
+    "Text": "رقم"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader6",
+    "Text": "المتغير 1"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader7",
+    "Text": "Var2"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader8",
+    "Text": "Var3"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader9",
+    "Text": "Var4"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader10",
+    "Text": "المتغير 5"
+  },
+  {
+    "Key": "FrmMain.LabelLoginStatus",
+    "Text": "سجل الخروج"
+  },
+  {
+    "Key": "FrmMain.Label4",
+    "Text": "WhatsAppSender الأعمال"
+  },
+  {
+    "Key": "FrmMain.TabPage1",
+    "Text": "الرسالة الأولى"
+  },
+  {
+    "Key": "FrmMain.Button19",
+    "Text": "أدخل المتغيرات"
+  },
+  {
+    "Key": "FrmMain.InsertFullNameToolStripMenuItem",
+    "Text": "أدخل الاسم الكامل"
+  },
+  {
+    "Key": "FrmMain.InsertFirstNameToolStripMenuItem",
+    "Text": "أدخل الاسم الأول"
+  },
+  {
+    "Key": "FrmMain.InsertLastNameToolStripMenuItem",
+    "Text": "أدخل اسم العائلة"
+  },
+  {
+    "Key": "FrmMain.InsertVarToolStripMenuItem",
+    "Text": "أدخل متغير"
+  },
+  {
+    "Key": "FrmMain.Variable1ToolStripMenuItem",
+    "Text": "المتغير 1"
+  },
+  {
+    "Key": "FrmMain.Variable2ToolStripMenuItem1",
+    "Text": "المتغير 2"
+  },
+  {
+    "Key": "FrmMain.Variable3ToolStripMenuItem1",
+    "Text": "المتغير 3"
+  },
+  {
+    "Key": "FrmMain.Variable4ToolStripMenuItem1",
+    "Text": "المتغير 4"
+  },
+  {
+    "Key": "FrmMain.Variable5ToolStripMenuItem1",
+    "Text": "المتغير 5"
+  },
+  {
+    "Key": "FrmMain.InsertRandomTagToolStripMenuItem",
+    "Text": "إدراج علامة عشوائية"
+  },
+  {
+    "Key": "FrmMain.InsertSpintaxToolStripMenuItem",
+    "Text": "إدراج Spintax"
+  },
+  {
+    "Key": "FrmMain.Button4",
+    "Text": "تصفية الأرقام"
+  },
+  {
+    "Key": "FrmMain.Button5",
+    "Text": "رسالة مستلمة"
+  },
+  {
+    "Key": "FrmMain.ToolStripMenuItem16",
+    "Text": "المتغير 1"
+  },
+  {
+    "Key": "FrmMain.Variable2ToolStripMenuItem",
+    "Text": "المتغير 2"
+  },
+  {
+    "Key": "FrmMain.Variable3ToolStripMenuItem",
+    "Text": "المتغير 3"
+  },
+  {
+    "Key": "FrmMain.Variable4ToolStripMenuItem",
+    "Text": "المتغير 4"
+  },
+  {
+    "Key": "FrmMain.Variable5ToolStripMenuItem",
+    "Text": "المتغير 5"
+  },
+  {
+    "Key": "FrmMain.Button20",
+    "Text": "مساعدة"
+  },
+  {
+    "Key": "FrmMain.Button9",
+    "Text": "حملة جديدة"
+  },
+  {
+    "Key": "FrmMain.Button6",
+    "Text": "أرقام افتراضية"
+  },
+  {
+    "Key": "FrmMain.Button7",
+    "Text": "الحملات المرسلة"
+  },
+  {
+    "Key": "FrmMain.Button14",
+    "Text": "رد آلي"
+  },
+  {
+    "Key": "FrmMain.Button15",
+    "Text": "قواعد الرد التلقائي"
+  },
+  {
+    "Key": "FrmMain.Button16",
+    "Text": "الإعدادات"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader1",
+    "Text": "تاريخ"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader11",
+    "Text": "مرسل"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader12",
+    "Text": "رسالة"
+  },
+  {
+    "Key": "FrmMain.Button13",
+    "Text": "واضح"
+  },
+  {
+    "Key": "FrmMain.LabelGroups",
+    "Text": "مجموعات:"
+  },
+  {
+    "Key": "FrmMain.Label2",
+    "Text": "رسالة مستلمة"
+  },
+  {
+    "Key": "FrmMain.ButtonSchedule",
+    "Text": "جدولة الإرسال"
+  },
+  {
+    "Key": "FrmMain.LabelContacts",
+    "Text": "جهات الاتصال:"
+  },
+  {
+    "Key": "FrmMain.LabelTotalContacts",
+    "Text": "مجموع:"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader13",
+    "Text": "اسم القواعد"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader18",
+    "Text": "الكلمات الدالة"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader14",
+    "Text": "الحالة"
+  },
+  {
+    "Key": "FrmMain.ModifyRuleToolStripMenuItem",
+    "Text": "تعديل القاعدة"
+  },
+  {
+    "Key": "FrmMain.DeleteRuleToolStripMenuItem",
+    "Text": "حذف القاعدة"
+  },
+  {
+    "Key": "FrmMain.Label1",
+    "Text": "رد آلي"
+  },
+  {
+    "Key": "FrmMain.NotifyIcon1",
+    "Text": "أخطر Icon1"
+  },
+  {
+    "Key": "FrmMain.PhotosToolStripMenuItem",
+    "Text": "الصور"
+  },
+  {
+    "Key": "FrmMain.VideosToolStripMenuItem",
+    "Text": "أشرطة فيديو"
+  },
+  {
+    "Key": "FrmMain.DocumentsToolStripMenuItem",
+    "Text": "مستندات"
+  },
+  {
+    "Key": "FrmMain.StickersToolStripMenuItem",
+    "Text": "صورة كملصقات"
+  },
+  {
+    "Key": "FrmMain.SetAutoReplyToolStripMenuItem",
+    "Text": "قم بتعيين رد تلقائي"
+  },
+  {
+    "Key": "FrmMain.AddAutoReplyRuleToolStripMenuItem",
+    "Text": "إضافة قاعدة رد تلقائي"
+  },
+  {
+    "Key": "FrmMain.ResetAutoReplyToolStripMenuItem",
+    "Text": "إعادة تعيين الرد التلقائي"
+  },
+  {
+    "Key": "FrmMain.ExportReceivedMessageToolStripMenuItem",
+    "Text": "تصدير رسالة مستلمة"
+  },
+  {
+    "Key": "FrmMain.ClearListToolStripMenuItem1",
+    "Text": "لائحة خالية"
+  },
+  {
+    "Key": "FrmMain",
+    "Text": "مرسل Whatsapp السائبة"
+  },
+  {
+    "Key": "FrmManualImports.BtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmManualImports.BtnImport",
+    "Text": "استيراد"
+  },
+  {
+    "Key": "FrmManualImports.Label2",
+    "Text": "أدخل جهات الاتصال"
+  },
+  {
+    "Key": "FrmManualImports.ColumnHeader1",
+    "Text": "اسم"
+  },
+  {
+    "Key": "FrmManualImports.ColumnHeader2",
+    "Text": "أعداد"
+  },
+  {
+    "Key": "FrmManualImports.LabelCount",
+    "Text": "مجموع:"
+  },
+  {
+    "Key": "FrmManualImports.CheckBoxRemoveDuplication",
+    "Text": "إزالة الازدواجية"
+  },
+  {
+    "Key": "FrmManualImports.Label1",
+    "Text": "سطر لكل رقم ، يمكنك الاسم بإدخال فاصلة الاسم ثم الجوال (الاسم والرقم)"
+  },
+  {
+    "Key": "FrmManualImports.Label3",
+    "Text": "جهات الاتصال التي تم التحقق منها"
+  },
+  {
+    "Key": "FrmManualImports.LabelDuplication",
+    "Text": "الازدواجية:"
+  },
+  {
+    "Key": "FrmManualImports",
+    "Text": "استيراد يدوي"
+  },
+  {
+    "Key": "FrmMessages",
+    "Text": "رسائل FrmMessages."
+  },
+  {
+    "Key": "FrmNumberGenerator.Label1",
+    "Text": "رقم البداية:"
+  },
+  {
+    "Key": "FrmNumberGenerator.Label2",
+    "Text": "العدد:"
+  },
+  {
+    "Key": "FrmNumberGenerator.BtnOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmNumberGenerator.BtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmNumberGenerator.Label3",
+    "Text": "زيادة راتب:"
+  },
+  {
+    "Key": "FrmNumberGenerator",
+    "Text": "توليد الرقم"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader1",
+    "Text": "تاريخ"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader2",
+    "Text": "مصدر"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader3",
+    "Text": "رسالة"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader4",
+    "Text": "نوع"
+  },
+  {
+    "Key": "FrmReceived",
+    "Text": "الرسائل المستردة"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelReceivedDate",
+    "Text": "ميعاد الاستلام:"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelSender",
+    "Text": "مرسل:"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelReceivedMessage",
+    "Text": "الرسالة المستلمة:"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelReplytoSender",
+    "Text": "رد على المرسل"
+  },
+  {
+    "Key": "FrmReceivedMessage.ButtonSend",
+    "Text": "إرسال"
+  },
+  {
+    "Key": "FrmReceivedMessage.ButtonClose",
+    "Text": "قريب"
+  },
+  {
+    "Key": "FrmReceivedMessage",
+    "Text": "رسالة مستلمة"
+  },
+  {
+    "Key": "FrmRules.ColumnHeader1",
+    "Text": "اسم الملف"
+  },
+  {
+    "Key": "FrmRules.ColumnHeader2",
+    "Text": "نوع"
+  },
+  {
+    "Key": "FrmRules.ColumnHeader3",
+    "Text": "شرح"
+  },
+  {
+    "Key": "FrmRules.SetCaptionToolStripMenuItem",
+    "Text": "تعيين تسمية توضيحية"
+  },
+  {
+    "Key": "FrmRules.DeleteToolStripMenuItem1",
+    "Text": "حذف ملف"
+  },
+  {
+    "Key": "FrmRules.OpenFileToolStripMenuItem",
+    "Text": "افتح ملف"
+  },
+  {
+    "Key": "FrmRules.ButtonOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmRules.ButtonCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmRules.LabelRuleName",
+    "Text": "اسم القاعدة"
+  },
+  {
+    "Key": "FrmRules.LabelKeyword",
+    "Text": "الكلمة الرئيسية"
+  },
+  {
+    "Key": "FrmRules.LabelMessage",
+    "Text": "رسالة"
+  },
+  {
+    "Key": "FrmRules.LabelAttachment",
+    "Text": "المرفق"
+  },
+  {
+    "Key": "FrmRules.ButtonAdd",
+    "Text": "أضف"
+  },
+  {
+    "Key": "FrmRules.ButtonModify",
+    "Text": "تعديل"
+  },
+  {
+    "Key": "FrmRules.ButtonDelete",
+    "Text": "حذف"
+  },
+  {
+    "Key": "FrmRules.ButtonClear",
+    "Text": "واضح"
+  },
+  {
+    "Key": "FrmRules.CheckBoxEnable",
+    "Text": "تمكين القاعدة"
+  },
+  {
+    "Key": "FrmRules.PhotosToolStripMenuItem",
+    "Text": "الصور"
+  },
+  {
+    "Key": "FrmRules.VideosToolStripMenuItem",
+    "Text": "أشرطة فيديو"
+  },
+  {
+    "Key": "FrmRules.DocumentsToolStripMenuItem",
+    "Text": "مستندات"
+  },
+  {
+    "Key": "FrmRules.StickersToolStripMenuItem",
+    "Text": "صورة كملصقات"
+  },
+  {
+    "Key": "FrmRules",
+    "Text": "قواعد"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader1",
+    "Text": "اسم"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader3",
+    "Text": "رقم"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader2",
+    "Text": "نوع"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader5",
+    "Text": "تاريخ إرسال"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader4",
+    "Text": "الحالة"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader6",
+    "Text": "رسالة"
+  },
+  {
+    "Key": "FrmSending.ButtonStop",
+    "Text": "قريب"
+  },
+  {
+    "Key": "FrmSending.ButtonPause",
+    "Text": "وقفة"
+  },
+  {
+    "Key": "FrmSending.LabelProgress",
+    "Text": "عملية الإرسال (0/0)"
+  },
+  {
+    "Key": "FrmSending.ButtonViewLog",
+    "Text": "تصدير"
+  },
+  {
+    "Key": "FrmSending.LabelCountDownHeader",
+    "Text": "سيبدأ الجزء الأكبر الخاص بك بعد"
+  },
+  {
+    "Key": "FrmSending.ButtonRetry",
+    "Text": "أعد المحاولة ..."
+  },
+  {
+    "Key": "FrmSending.ExportSuccessfulToolStripMenuItem",
+    "Text": "تم التصدير بنجاح"
+  },
+  {
+    "Key": "FrmSending.ExportAllToolStripMenuItem",
+    "Text": "تصدير الكل"
+  },
+  {
+    "Key": "FrmSending",
+    "Text": "إرسال"
+  },
+  {
+    "Key": "FrmSendingMode.ButtonOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmSendingMode.ButtonCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmSendingMode.Label2",
+    "Text": "عندما تقوم بجدولة الجزء الأكبر ، يجب عليك إبقاء التطبيق مفتوحًا وكذلك WhatsApp الخاص بك على هاتفك المحمول مفتوحًا ونشطًا"
+  },
+  {
+    "Key": "FrmSendingMode.Label1",
+    "Text": "جدولة الإرسال"
+  },
+  {
+    "Key": "FrmSendingMode",
+    "Text": "جدولة الإرسال"
+  },
+  {
+    "Key": "FrmSendingType.RadioButtonSafeMode",
+    "Text": "الوضع الآمن"
+  },
+  {
+    "Key": "FrmSendingType.RadioButtonBlindMode",
+    "Text": "وضع المكفوفين"
+  },
+  {
+    "Key": "FrmSendingType.Label1",
+    "Text": "يسمح هذا الوضع بالإرسال إلى جهات الاتصال والمجموعات الآمنة ، وتعني جهات الاتصال الآمنة جهات الاتصال التي سبق لك إجراء محادثة معها من قبل."
+  },
+  {
+    "Key": "FrmSendingType.Label2",
+    "Text": "سيتم إرساله إلى جميع جهات الاتصال التي تقوم باستيرادها ، مهما كان صالحًا أو غير صالح ، فإن الوضع الأعمى لن يعرض حالة الرسالة."
+  },
+  {
+    "Key": "FrmSendingType.ButtonOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmSendingType.ButtonCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmSendingType.Label3",
+    "Text": "حدد وضع الإرسال الخاص بك"
+  },
+  {
+    "Key": "FrmSendingType.Label4",
+    "Text": "منع المخاطر منخفضة"
+  },
+  {
+    "Key": "FrmSendingType.Label6",
+    "Text": "خطر كتلة عالية"
+  },
+  {
+    "Key": "FrmSendingType",
+    "Text": "وضع الإرسال"
+  },
+  {
+    "Key": "FrmSentCampain.ColumnHeader1",
+    "Text": "تاريخ الإرسال"
+  },
+  {
+    "Key": "FrmSentCampain.ColumnHeader2",
+    "Text": "العد"
+  },
+  {
+    "Key": "FrmSentCampain",
+    "Text": "حملة مرسلة"
+  },
+  {
+    "Key": "FrmSetCaption.BtnOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmSetCaption.BtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmSetCaption.LinkLastName",
+    "Text": "الكنية"
+  },
+  {
+    "Key": "FrmSetCaption.LinkFirstName",
+    "Text": "الاسم الاول"
+  },
+  {
+    "Key": "FrmSetCaption.LinkName",
+    "Text": "الاسم الكامل"
+  },
+  {
+    "Key": "FrmSetCaption",
+    "Text": "تعيين تسمية توضيحية"
+  },
+  {
+    "Key": "FrmSpintax.Label17",
+    "Text": "ولدت Spintax"
+  },
+  {
+    "Key": "FrmSpintax.Button1",
+    "Text": "إضافة إلى الرسالة"
+  },
+  {
+    "Key": "FrmSpintax.Button2",
+    "Text": "نسخ"
+  },
+  {
+    "Key": "FrmSpintax.Button3",
+    "Text": "قريب"
+  },
+  {
+    "Key": "FrmSpintax",
+    "Text": "مولد SpinTax"
+  },
+  {
+    "Key": "FrmTheme.BtnCancel",
+    "Text": "إلغاء"
+  },
+  {
+    "Key": "FrmTheme.BtnOK",
+    "Text": "موافق"
+  },
+  {
+    "Key": "FrmTheme.Label2",
+    "Text": "لون القائمة الفرعية"
+  },
+  {
+    "Key": "FrmTheme.Label1",
+    "Text": "لون القائمة والأزرار"
+  },
+  {
+    "Key": "FrmTheme.Button9",
+    "Text": "حسابات"
+  },
+  {
+    "Key": "FrmTheme.Button6",
+    "Text": "الإعدادات"
+  },
+  {
+    "Key": "FrmTheme.Button5",
+    "Text": "مجموعة المنتزع"
+  },
+  {
+    "Key": "FrmTheme.Button4",
+    "Text": "تصفية الأرقام"
+  },
+  {
+    "Key": "FrmTheme.MnStripMain",
+    "Text": "MenuStrip1"
+  },
+  {
+    "Key": "FrmTheme.FileToolStripMenuItem",
+    "Text": "&ملف"
+  },
+  {
+    "Key": "FrmTheme.NewBulkToolStripMenuItem",
+    "Text": "كتلة جديدة"
+  },
+  {
+    "Key": "FrmTheme.NewGroupsPostingToolStripMenuItem",
+    "Text": "نشر مجموعات جديدة"
+  },
+  {
+    "Key": "FrmTheme.ImportNumbersToolStripMenuItem",
+    "Text": "أرقام الاستيراد"
+  },
+  {
+    "Key": "FrmTheme.FF2",
+    "Text": "من الملفات"
+  },
+  {
+    "Key": "FrmTheme.MM2",
+    "Text": "كتيب"
+  },
+  {
+    "Key": "FrmTheme.AA1",
+    "Text": "مولد الأرقام"
+  },
+  {
+    "Key": "FrmTheme.ImportMessageToolStripMenuItem",
+    "Text": "رسالة استيراد"
+  },
+  {
+    "Key": "FrmTheme.ExportNumbersToolStripMenuItem",
+    "Text": "أرقام التصدير"
+  },
+  {
+    "Key": "FrmTheme.SaveMessageToolStripMenuItem",
+    "Text": "حفظ الرسالة"
+  },
+  {
+    "Key": "FrmTheme.ExitToolStripMenuItem",
+    "Text": "خروج"
+  },
+  {
+    "Key": "FrmTheme.EditToolStripMenuItem",
+    "Text": "&تعديل"
+  },
+  {
+    "Key": "FrmTheme.ClearNumbersListToolStripMenuItem",
+    "Text": "مسح قائمة الأرقام"
+  },
+  {
+    "Key": "FrmTheme.ClearMessageToolStripMenuItem",
+    "Text": "رسالة واضحة"
+  },
+  {
+    "Key": "FrmTheme.ClearLogToolStripMenuItem",
+    "Text": "سجل نظيف"
+  },
+  {
+    "Key": "FrmTheme.ManageToolStripMenuItem",
+    "Text": "حسابات"
+  },
+  {
+    "Key": "FrmTheme.ManageAccountsToolStripMenuItem",
+    "Text": "إدارة الحسابات"
+  },
+  {
+    "Key": "FrmTheme.ToolsToolStripMenuItem",
+    "Text": "أدوات"
+  },
+  {
+    "Key": "FrmTheme.NumberFilterToolStripMenuItem",
+    "Text": "مرشح WhatsAppNumber"
+  },
+  {
+    "Key": "FrmTheme.GroupsContactsGrabberToolStripMenuItem",
+    "Text": "المجموعات اتصالات Grabber"
+  },
+  {
+    "Key": "FrmTheme.SettingsToolStripMenuItem",
+    "Text": "الإعدادات"
+  },
+  {
+    "Key": "FrmTheme.HelpToolStripMenuItem",
+    "Text": "مساعدة"
+  },
+  {
+    "Key": "FrmTheme.ViewHelpToolStripMenuItem",
+    "Text": "عرض مساعده"
+  },
+  {
+    "Key": "FrmTheme.UpdateLicenseToolStripMenuItem",
+    "Text": "تحديث الترخيص"
+  },
+  {
+    "Key": "FrmTheme.AboutToolStripMenuItem",
+    "Text": "حول"
+  },
+  {
+    "Key": "FrmTheme.Label4",
+    "Text": "السائبة WHATSAPP المرسل"
+  },
+  {
+    "Key": "FrmTheme.GroupBox1",
+    "Text": "معاينة"
+  },
+  {
+    "Key": "FrmTheme.Button1",
+    "Text": "إعادة تعيين"
+  },
+  {
+    "Key": "FrmTheme",
+    "Text": "المظاهر"
+  },
+  {
+    "Key": "You_have_to_add_accounts",
+    "Text": "يجب عليك إضافة حسابات"
+  },
+  {
+    "Key": "Account_must_be_numeric",
+    "Text": "يجب أن يكون الحساب رقميًا"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_delete_this_account",
+    "Text": "هل أنت متأكد أنك تريد حذف هذا الحساب؟"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_delete_this_message",
+    "Text": "هل أنت متأكد أنك تريد حذف هذه الرسالة؟"
+  },
+  {
+    "Key": "The_file_that_you_want_to_add_its_already_available_do_you_want_add_it_anyway",
+    "Text": "الملف الذي تريد إضافته متاح بالفعل ، هل تريد إضافته على أي حال؟"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_clear_the_list",
+    "Text": "هل أنت متأكد أنك تريد مسح القائمة؟"
+  },
+  {
+    "Key": "No_records_to_exports",
+    "Text": "لا توجد سجلات للتصدير"
+  },
+  {
+    "Key": "WhatsApp_not_Loggged_do_you_want_login",
+    "Text": "WhatsApp غير مسجل ، هل تريد تسجيل الدخول؟"
+  },
+  {
+    "Key": "Are_you_sure_you_want_clear_this_list",
+    "Text": "هل أنت متأكد أنك تريد مسح هذه القائمة؟"
+  },
+  {
+    "Key": "Are_you_sure_you want_to_stop",
+    "Text": "هل أنت متأكد أنك تريد التوقف؟"
+  },
+  {
+    "Key": "Empty_list",
+    "Text": "قائمة فارغة"
+  },
+  {
+    "Key": "The_file_that_you_want_to_add_its_already_available_do_you_want_add_it_anyway",
+    "Text": "الملف الذي تريد إضافته متاح بالفعل ، هل تريد إضافته على أي حال؟"
+  },
+  {
+    "Key": "You_have_enter_Rule_Name",
+    "Text": "لقد أدخلت اسم القاعدة"
+  },
+  {
+    "Key": "You_have_to_enter_keyword",
+    "Text": "يجب عليك إدخال الكلمة الأساسية"
+  },
+  {
+    "Key": "BWS_LICENSE_ACTIVATED",
+    "Text": "تم تفعيل الترخيص بنجاح"
+  },
+  {
+    "Key": "BWS_INVALID_LICENSE",
+    "Text": "ترخيص غير صالح"
+  },
+  {
+    "Key": "BWS_VALID_UNTILL",
+    "Text": "رخصة صالحة حتى"
+  },
+  {
+    "Key": "Your_bulk_has_been_done",
+    "Text": "تم الانتهاء من الجزء الأكبر الخاص بك"
+  },
+  {
+    "Key": "Messages.CLEAR_LIST",
+    "Text": "هل أنت متأكد أنك تريد مسح هذه القائمة؟"
+  },
+  {
+    "Key": "Messages.DELETE_NUMBER",
+    "Text": "هل أنت متأكد أنك تريد حذف هذا الرقم؟"
+  },
+  {
+    "Key": "No_destination_to_send",
+    "Text": "لا توجد وجهة للإرسال"
+  },
+  {
+    "Key": "No_content_or_material_to_send",
+    "Text": "لا محتوى أو مادة لإرسالها"
+  },
+  {
+    "Key": "BWS_CLEAR_LOG",
+    "Text": "هل تريد مسح السجل؟"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_clear_attachment_list",
+    "Text": "هل أنت متأكد أنك تريد مسح قائمة المرفقات؟"
+  },
+  {
+    "Key": "WhatsApp_not_ready_please_wait_and_check",
+    "Text": "WhatsApp غير جاهز ، يرجى الانتظار والتحقق."
+  },
+  {
+    "Key": "No_destination_to_send",
+    "Text": "لا توجد وجهة للإرسال"
+  },
+  {
+    "Key": "No_content_or_material_to_send",
+    "Text": "لا محتوى أو مادة لإرسالها"
+  },
+  {
+    "Key": "Are_you_Sure_you_want_to_delete_rule",
+    "Text": "هل أنت متأكد أنك تريد حذف هذه القاعدة؟"
+  },
+  {
+    "Key": "Auto_reply_has_been_rested",
+    "Text": "تمت إعادة الرد التلقائي وسيتلقى كل الحساب رسالة رد تلقائي"
+  },
+  {
+    "Key": "Are_you_sure_you_want_start_new_bulk",
+    "Text": "هل أنت متأكد أنك تريد البدء بكميات كبيرة جديدة؟"
+  },
+  {
+    "Key": "BWS_CLOSE_APPLICATION",
+    "Text": "هل أنت متأكد أنك تريد إغلاق التطبيق"
+  }
+]

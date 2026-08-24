@@ -1,0 +1,1670 @@
+[
+  {
+    "Key": "FrmAdd.BtnOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmAdd.BtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmAdd.Label1",
+    "Text": "Código de país"
+  },
+  {
+    "Key": "FrmAdd",
+    "Text": "Agregar código de país"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountBtnOk",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountBtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountLabel1",
+    "Text": "Número de cuenta de Whatsapp"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountLabel2",
+    "Text": "Asegúrese de que la cuenta que agregue sea una cuenta de WhatsApp y que él reciba mensajes de usted"
+  },
+  {
+    "Key": "FrmAdd.FamiliarAccountText",
+    "Text": "Agregar cuenta familiar de Whatsapp"
+  },
+  {
+    "Key": "FrmAdd.MessageBtnOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmAdd.MessageBtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmAdd.MessageLabel1",
+    "Text": "Mensaje"
+  },
+  {
+    "Key": "FrmAdd.MessageText",
+    "Text": "Agregar mensaje"
+  },
+  {
+    "Key": "FrmAdvanced.BtnAddFamiliarAccount",
+    "Text": "Añadir"
+  },
+  {
+    "Key": "FrmAdvanced.BtnDeleteFamiliarAccount",
+    "Text": "Eliminar"
+  },
+  {
+    "Key": "FrmAdvanced.BtnAddMessages",
+    "Text": "Añadir"
+  },
+  {
+    "Key": "FrmAdvanced.BtnDeleteMessages",
+    "Text": "Eliminar"
+  },
+  {
+    "Key": "FrmAdvanced.Label2",
+    "Text": "para:"
+  },
+  {
+    "Key": "FrmAdvanced.Label10",
+    "Text": "Mensajes"
+  },
+  {
+    "Key": "FrmAdvanced.Label3",
+    "Text": "Segundos"
+  },
+  {
+    "Key": "FrmAdvanced.Label1",
+    "Text": "Después:"
+  },
+  {
+    "Key": "FrmAdvanced.Label7",
+    "Text": "Cuentas comunes de Whatsapp"
+  },
+  {
+    "Key": "FrmAdvanced.Label8",
+    "Text": "Diccionario de mensajes"
+  },
+  {
+    "Key": "FrmAdvanced.Button5",
+    "Text": "Cerca"
+  },
+  {
+    "Key": "FrmAdvanced.CheckBox2",
+    "Text": "Activa la suspensión entre envíos"
+  },
+  {
+    "Key": "FrmAdvanced.GroupBox4",
+    "Text": "Retraso entre mensajes"
+  },
+  {
+    "Key": "FrmAdvanced.Label12",
+    "Text": "Segundos"
+  },
+  {
+    "Key": "FrmAdvanced.Label14",
+    "Text": "y"
+  },
+  {
+    "Key": "FrmAdvanced.Label11",
+    "Text": "Segundos"
+  },
+  {
+    "Key": "FrmAdvanced.WaitFrom2",
+    "Text": "Esperar entre:"
+  },
+  {
+    "Key": "FrmAdvanced.GroupBox5",
+    "Text": "Velocidad de conexión"
+  },
+  {
+    "Key": "FrmAdvanced.TabPage1",
+    "Text": "Conexión"
+  },
+  {
+    "Key": "FrmAdvanced.TabPage2",
+    "Text": "Configuración de envío"
+  },
+  {
+    "Key": "FrmAdvanced.TabPage3",
+    "Text": "Envío amistoso"
+  },
+  {
+    "Key": "FrmAdvanced.CheckBox1",
+    "Text": "Activar diálogo amigable"
+  },
+  {
+    "Key": "FrmAdvanced.Label13",
+    "Text": "Contar:"
+  },
+  {
+    "Key": "FrmAdvanced.Label4",
+    "Text": "Mensajes"
+  },
+  {
+    "Key": "FrmAdvanced.Label5",
+    "Text": "Después:"
+  },
+  {
+    "Key": "FrmAdvanced.Label15",
+    "Text": "Tenga en cuenta que: solo funciona en modo ciego"
+  },
+  {
+    "Key": "FrmAdvanced",
+    "Text": "Configuración de envío"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonClear",
+    "Text": "Claro"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonDelete",
+    "Text": "Eliminar"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonAdd",
+    "Text": "Añadir"
+  },
+  {
+    "Key": "FrmAutoReply.LabelAttachment",
+    "Text": "Adjunto archivo"
+  },
+  {
+    "Key": "FrmAutoReply.LabelMessage",
+    "Text": "Mensaje"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmAutoReply.ButtonOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmAutoReply.ColumnHeader1",
+    "Text": "Nombre del archivo"
+  },
+  {
+    "Key": "FrmAutoReply.ColumnHeader2",
+    "Text": "Tipo"
+  },
+  {
+    "Key": "FrmAutoReply.ColumnHeader3",
+    "Text": "Subtítulo"
+  },
+  {
+    "Key": "FrmAutoReply.SetCaptionToolStripMenuItem",
+    "Text": "Establecer subtítulo"
+  },
+  {
+    "Key": "FrmAutoReply.DeleteToolStripMenuItem1",
+    "Text": "Borrar archivo"
+  },
+  {
+    "Key": "FrmAutoReply.OpenFileToolStripMenuItem",
+    "Text": "Abrir documento"
+  },
+  {
+    "Key": "FrmAutoReply.PhotosToolStripMenuItem",
+    "Text": "Fotos"
+  },
+  {
+    "Key": "FrmAutoReply.VideosToolStripMenuItem",
+    "Text": "Videos"
+  },
+  {
+    "Key": "FrmAutoReply.DocumentsToolStripMenuItem",
+    "Text": "Documentos"
+  },
+  {
+    "Key": "FrmAutoReply.StickersToolStripMenuItem",
+    "Text": "Imagen como pegatinas"
+  },
+  {
+    "Key": "FrmAutoReply",
+    "Text": "Mensaje de respuesta automática"
+  },
+  {
+    "Key": "FrmBrowser",
+    "Text": "WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader1",
+    "Text": "Nombre"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader2",
+    "Text": "Número"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader3",
+    "Text": "Tipo"
+  },
+  {
+    "Key": "FrmFilter.ColumnHeader4",
+    "Text": "Estado"
+  },
+  {
+    "Key": "FrmFilter.ButtonImportFromFile",
+    "Text": "Archivos"
+  },
+  {
+    "Key": "FrmFilter.ButtonManualImport",
+    "Text": "Manual"
+  },
+  {
+    "Key": "FrmFilter.ButtonNumberGenerator",
+    "Text": "Generador de números"
+  },
+  {
+    "Key": "FrmFilter.ButtonExport",
+    "Text": "Exportar"
+  },
+  {
+    "Key": "FrmFilter.Label4",
+    "Text": "Total:"
+  },
+  {
+    "Key": "FrmFilter.ExportAllToolStripMenuItem",
+    "Text": "Exportar todo"
+  },
+  {
+    "Key": "FrmFilter.WhatsAppOnlyToolStripMenuItem",
+    "Text": "Solo WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.BusinessWhatsAppToolStripMenuItem",
+    "Text": "WhatsApp de negocios"
+  },
+  {
+    "Key": "FrmFilter.RegularWhatsAppToolStripMenuItem",
+    "Text": "WhatsApp regular"
+  },
+  {
+    "Key": "FrmFilter.NonWhatsAppToolStripMenuItem",
+    "Text": "No WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.Button1",
+    "Text": "Comience a verificar"
+  },
+  {
+    "Key": "FrmFilter.ButtonStop",
+    "Text": "Detener"
+  },
+  {
+    "Key": "FrmFilter.GroupBox1",
+    "Text": "Retrasar"
+  },
+  {
+    "Key": "FrmFilter.Label1",
+    "Text": "Segundo"
+  },
+  {
+    "Key": "FrmFilter.Label8",
+    "Text": "WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.Label10",
+    "Text": "Negocio"
+  },
+  {
+    "Key": "FrmFilter.Label12",
+    "Text": "Normal:"
+  },
+  {
+    "Key": "FrmFilter.LabelRequestProgress",
+    "Text": "Progreso de solicitud"
+  },
+  {
+    "Key": "FrmFilter.LabelVerificationProgress",
+    "Text": "Progreso de verificación"
+  },
+  {
+    "Key": "FrmFilter.ButtonClear",
+    "Text": "Claro"
+  },
+  {
+    "Key": "FrmFilter.ButtonClose",
+    "Text": "Cerca"
+  },
+  {
+    "Key": "FrmFilter.GroupBox2",
+    "Text": "Importar"
+  },
+  {
+    "Key": "FrmFilter.ButtonImporttosender",
+    "Text": "Importar al remitente"
+  },
+  {
+    "Key": "FrmFilter.ImportAllWhatsAppToolStripMenuItem",
+    "Text": "Importar todos los números de WhatsApp"
+  },
+  {
+    "Key": "FrmFilter.ImportRegularWhatsAppToolStripMenuItem",
+    "Text": "Importar WhatsApp Regular"
+  },
+  {
+    "Key": "FrmFilter.ImportBusinessWhatsAppToolStripMenuItem",
+    "Text": "Importar negocios de WhatsApp"
+  },
+  {
+    "Key": "FrmFilter",
+    "Text": "Filtro de números de WhatsApp"
+  },
+  {
+    "Key": "FrmImportFromFiles.BtnOpenDialog",
+    "Text": "Vistazo"
+  },
+  {
+    "Key": "FrmImportFromFiles.BtnImport",
+    "Text": "Importar"
+  },
+  {
+    "Key": "FrmImportFromFiles.BtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmImportFromFiles.LinkLabel1",
+    "Text": "Muestras de formato de archivos"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBox1",
+    "Text": "Eliminar duplicación"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBox2",
+    "Text": "Primera fila como encabezado"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label1",
+    "Text": "Campo de nombre"
+  },
+  {
+    "Key": "FrmImportFromFiles.GroupBox2",
+    "Text": "Importar archivo"
+  },
+  {
+    "Key": "FrmImportFromFiles.LinkLabel2",
+    "Text": "ver aquí archivos de demostración"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label9",
+    "Text": "Para evitar errores, importe los archivos en la estructura correcta y los archivos de formato deben ser"
+  },
+  {
+    "Key": "FrmImportFromFiles.GroupBox3",
+    "Text": "Asignar campos"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label2",
+    "Text": "Campo de número"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label3",
+    "Text": "Campo Var1"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label7",
+    "Text": "Campo Var5"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label4",
+    "Text": "Campo Var2"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label6",
+    "Text": "Campo Var4"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label5",
+    "Text": "Campo Var3"
+  },
+  {
+    "Key": "FrmImportFromFiles.GroupBox1",
+    "Text": "Configuraciones"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBoxDelimeter",
+    "Text": "Delimitador personalizado"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBoxRemoveDuplication",
+    "Text": "Eliminar duplicaciones"
+  },
+  {
+    "Key": "FrmImportFromFiles.CheckBoxFirstRow",
+    "Text": "Use la primera fila como encabezado"
+  },
+  {
+    "Key": "FrmImportFromFiles.Label8",
+    "Text": "Seleccionar archivo para importar"
+  },
+  {
+    "Key": "FrmImportFromFiles",
+    "Text": "Importar desde archivo"
+  },
+  {
+    "Key": "FrmLanguage.LabelLanguage",
+    "Text": "Seleccione el idioma"
+  },
+  {
+    "Key": "FrmLanguage.BtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmLanguage.BtnOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmLanguage",
+    "Text": "Idioma"
+  },
+  {
+    "Key": "FrmLicense.Label1",
+    "Text": "Clave de solicitud"
+  },
+  {
+    "Key": "FrmLicense.Label2",
+    "Text": "Envíenos su clave de solicitud junto con su prueba de seguimiento"
+  },
+  {
+    "Key": "FrmLicense.Label3",
+    "Text": "Clave de licencia"
+  },
+  {
+    "Key": "FrmLicense.Button1",
+    "Text": "Activar"
+  },
+  {
+    "Key": "FrmLicense.Button2",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmLicense.Button3",
+    "Text": "Copiar"
+  },
+  {
+    "Key": "FrmLicense",
+    "Text": "Activa el remitente masivo de WhatsApp"
+  },
+  {
+    "Key": "FrmLog.MenuStrip1",
+    "Text": "MenuStrip1"
+  },
+  {
+    "Key": "FrmLog.FileToolStripMenuItem",
+    "Text": "&Expediente"
+  },
+  {
+    "Key": "FrmLog.SaveLogToolStripMenuItem",
+    "Text": "Guardar registro"
+  },
+  {
+    "Key": "FrmLog.ExitToolStripMenuItem",
+    "Text": "Salida"
+  },
+  {
+    "Key": "FrmLog",
+    "Text": "Registro de mensajes"
+  },
+  {
+    "Key": "FrmLog.gingLabel1",
+    "Text": "Iniciando sesión, por favor espere ..."
+  },
+  {
+    "Key": "FrmLog.gingText",
+    "Text": "FrmLog.ging"
+  },
+  {
+    "Key": "FrmMain.FF3",
+    "Text": "Importaciones desde archivos"
+  },
+  {
+    "Key": "FrmMain.MM3",
+    "Text": "Importaciones manuales"
+  },
+  {
+    "Key": "FrmMain.DeleteToolStripMenuItem",
+    "Text": "Eliminar"
+  },
+  {
+    "Key": "FrmMain.ClearListToolStripMenuItem",
+    "Text": "Limpiar lista"
+  },
+  {
+    "Key": "FrmMain.MnStripMain",
+    "Text": "MenuStrip1"
+  },
+  {
+    "Key": "FrmMain.FileToolStripMenuItem",
+    "Text": "&Expediente"
+  },
+  {
+    "Key": "FrmMain.NewBulkToolStripMenuItem",
+    "Text": "Bulto nuevo"
+  },
+  {
+    "Key": "FrmMain.NewAutoReplyRuleToolStripMenuItem",
+    "Text": "Nueva regla de respuesta automática"
+  },
+  {
+    "Key": "FrmMain.ImportNumbersToolStripMenuItem",
+    "Text": "Importar números"
+  },
+  {
+    "Key": "FrmMain.FF2",
+    "Text": "De archivos"
+  },
+  {
+    "Key": "FrmMain.MM2",
+    "Text": "Manual"
+  },
+  {
+    "Key": "FrmMain.WhatsAppContactsToolStripMenuItem",
+    "Text": "Contactos de WhatsApp"
+  },
+  {
+    "Key": "FrmMain.WhatsAppGroupsToolStripMenuItem",
+    "Text": "Grupos de WhatsApp"
+  },
+  {
+    "Key": "FrmMain.ImportMessageToolStripMenuItem",
+    "Text": "Importar mensaje"
+  },
+  {
+    "Key": "FrmMain.ExportNumbersToolStripMenuItem",
+    "Text": "Números de exportación"
+  },
+  {
+    "Key": "FrmMain.SaveMessageToolStripMenuItem",
+    "Text": "Guardar mensaje"
+  },
+  {
+    "Key": "FrmMain.ExitToolStripMenuItem",
+    "Text": "Salida"
+  },
+  {
+    "Key": "FrmMain.EditToolStripMenuItem",
+    "Text": "&Editar"
+  },
+  {
+    "Key": "FrmMain.ClearNumbersListToolStripMenuItem",
+    "Text": "Borrar lista de números"
+  },
+  {
+    "Key": "FrmMain.ClearMessageToolStripMenuItem",
+    "Text": "Mensaje claro"
+  },
+  {
+    "Key": "FrmMain.ClearLogToolStripMenuItem",
+    "Text": "Borrar registro"
+  },
+  {
+    "Key": "FrmMain.ViewToolStripMenuItem",
+    "Text": "&Ver"
+  },
+  {
+    "Key": "FrmMain.SentCampaignsToolStripMenuItem",
+    "Text": "Campañas enviadas"
+  },
+  {
+    "Key": "FrmMain.ReceivedMessageToolStripMenuItem",
+    "Text": "Mensaje recibido"
+  },
+  {
+    "Key": "FrmMain.LogsToolStripMenuItem",
+    "Text": "Registros"
+  },
+  {
+    "Key": "FrmMain.SettingsToolStripMenuItem1",
+    "Text": "Configuraciones"
+  },
+  {
+    "Key": "FrmMain.SendingSettingsToolStripMenuItem",
+    "Text": "Configuración de envío"
+  },
+  {
+    "Key": "FrmMain.SetAutoReplyToolStripMenuItem1",
+    "Text": "Establecer respuesta automática"
+  },
+  {
+    "Key": "FrmMain.LanguagesToolStripMenuItem",
+    "Text": "Idiomas"
+  },
+  {
+    "Key": "FrmMain.ThemesToolStripMenuItem",
+    "Text": "Temas"
+  },
+  {
+    "Key": "FrmMain.ToolsToolStripMenuItem",
+    "Text": "Herramientas"
+  },
+  {
+    "Key": "FrmMain.NumberFilterToolStripMenuItem",
+    "Text": "Filtro de WhatsAppNumber"
+  },
+  {
+    "Key": "FrmMain.VirtualNumbersToolStripMenuItem",
+    "Text": "Números virtuales"
+  },
+  {
+    "Key": "FrmMain.HelpToolStripMenuItem",
+    "Text": "Ayuda"
+  },
+  {
+    "Key": "FrmMain.ViewHelpToolStripMenuItem",
+    "Text": "Ver ayuda"
+  },
+  {
+    "Key": "FrmMain.CheckForUpdateToolStripMenuItem",
+    "Text": "Buscar actualizaciones"
+  },
+  {
+    "Key": "FrmMain.UpdateLicenseToolStripMenuItem",
+    "Text": "Actualizar licencia"
+  },
+  {
+    "Key": "FrmMain.AboutToolStripMenuItem",
+    "Text": "Acerca de"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader3",
+    "Text": "Nombre del archivo"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader4",
+    "Text": "Tipo"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader5",
+    "Text": "Subtítulo"
+  },
+  {
+    "Key": "FrmMain.SetCaptionToolStripMenuItem",
+    "Text": "Establecer subtítulo"
+  },
+  {
+    "Key": "FrmMain.DeleteToolStripMenuItem1",
+    "Text": "Borrar archivo"
+  },
+  {
+    "Key": "FrmMain.OpenFileToolStripMenuItem",
+    "Text": "Abrir documento"
+  },
+  {
+    "Key": "FrmMain.Button2",
+    "Text": "Claro"
+  },
+  {
+    "Key": "FrmMain.Label17",
+    "Text": "Adjuntar archivos y fotos"
+  },
+  {
+    "Key": "FrmMain.BtnImgBrowse",
+    "Text": "Agregar archivos o fotos"
+  },
+  {
+    "Key": "FrmMain.BtnSending",
+    "Text": "Enviar ahora"
+  },
+  {
+    "Key": "FrmMain.HeadarPanel",
+    "Text": "ENVIANDO REGISTRO"
+  },
+  {
+    "Key": "FrmMain.Label10",
+    "Text": "Mensaje"
+  },
+  {
+    "Key": "FrmMain.ButtonOpenWhatsApp",
+    "Text": "Abre WhatsApp"
+  },
+  {
+    "Key": "FrmMain.Button10",
+    "Text": "Importaciones"
+  },
+  {
+    "Key": "FrmMain.Button11",
+    "Text": "Exportaciones"
+  },
+  {
+    "Key": "FrmMain.Button12",
+    "Text": "Claro"
+  },
+  {
+    "Key": "FrmMain.FF1",
+    "Text": "Importar desde archivo"
+  },
+  {
+    "Key": "FrmMain.MM1",
+    "Text": "Importaciones manuales"
+  },
+  {
+    "Key": "FrmMain.ImportFromWhatsAppContactsToolStripMenuItem",
+    "Text": "Importar desde contactos de WhatsApp"
+  },
+  {
+    "Key": "FrmMain.ImportFromWhatsAppGroupsToolStripMenuItem",
+    "Text": "Importar desde grupos de WhatsApp"
+  },
+  {
+    "Key": "FrmMain.LblNumbers",
+    "Text": "Números de Whatsapp"
+  },
+  {
+    "Key": "FrmMain.ClnNumber",
+    "Text": "Nombre"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader2",
+    "Text": "Número"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader6",
+    "Text": "Var1"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader7",
+    "Text": "Var2"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader8",
+    "Text": "Var3"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader9",
+    "Text": "Var4"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader10",
+    "Text": "Var5"
+  },
+  {
+    "Key": "FrmMain.LabelLoginStatus",
+    "Text": "Cerré la sesión"
+  },
+  {
+    "Key": "FrmMain.Label4",
+    "Text": "Negocios WhatsAppSender"
+  },
+  {
+    "Key": "FrmMain.TabPage1",
+    "Text": "Mensaje 1"
+  },
+  {
+    "Key": "FrmMain.Button19",
+    "Text": "Insertar variables"
+  },
+  {
+    "Key": "FrmMain.InsertFullNameToolStripMenuItem",
+    "Text": "Insertar nombre completo"
+  },
+  {
+    "Key": "FrmMain.InsertFirstNameToolStripMenuItem",
+    "Text": "Insertar nombre"
+  },
+  {
+    "Key": "FrmMain.InsertLastNameToolStripMenuItem",
+    "Text": "Insertar apellido"
+  },
+  {
+    "Key": "FrmMain.InsertVarToolStripMenuItem",
+    "Text": "Insertar variable"
+  },
+  {
+    "Key": "FrmMain.Variable1ToolStripMenuItem",
+    "Text": "Variable1"
+  },
+  {
+    "Key": "FrmMain.Variable2ToolStripMenuItem1",
+    "Text": "Variable2"
+  },
+  {
+    "Key": "FrmMain.Variable3ToolStripMenuItem1",
+    "Text": "Variable3"
+  },
+  {
+    "Key": "FrmMain.Variable4ToolStripMenuItem1",
+    "Text": "Variable4"
+  },
+  {
+    "Key": "FrmMain.Variable5ToolStripMenuItem1",
+    "Text": "Variable5"
+  },
+  {
+    "Key": "FrmMain.InsertRandomTagToolStripMenuItem",
+    "Text": "Insertar etiqueta aleatoria"
+  },
+  {
+    "Key": "FrmMain.InsertSpintaxToolStripMenuItem",
+    "Text": "Insertar Spintax"
+  },
+  {
+    "Key": "FrmMain.Button4",
+    "Text": "Filtro de números"
+  },
+  {
+    "Key": "FrmMain.Button5",
+    "Text": "Mensaje recibido"
+  },
+  {
+    "Key": "FrmMain.ToolStripMenuItem16",
+    "Text": "Variable1"
+  },
+  {
+    "Key": "FrmMain.Variable2ToolStripMenuItem",
+    "Text": "Variable2"
+  },
+  {
+    "Key": "FrmMain.Variable3ToolStripMenuItem",
+    "Text": "Variable3"
+  },
+  {
+    "Key": "FrmMain.Variable4ToolStripMenuItem",
+    "Text": "Variable4"
+  },
+  {
+    "Key": "FrmMain.Variable5ToolStripMenuItem",
+    "Text": "Variable5"
+  },
+  {
+    "Key": "FrmMain.Button20",
+    "Text": "Ayuda"
+  },
+  {
+    "Key": "FrmMain.Button9",
+    "Text": "Nueva campaña"
+  },
+  {
+    "Key": "FrmMain.Button6",
+    "Text": "Números virtuales"
+  },
+  {
+    "Key": "FrmMain.Button7",
+    "Text": "Campañas enviadas"
+  },
+  {
+    "Key": "FrmMain.Button14",
+    "Text": "Respuesta automática"
+  },
+  {
+    "Key": "FrmMain.Button15",
+    "Text": "Reglas de respuesta automática"
+  },
+  {
+    "Key": "FrmMain.Button16",
+    "Text": "Configuraciones"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader1",
+    "Text": "Fecha"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader11",
+    "Text": "Remitente"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader12",
+    "Text": "Mensaje"
+  },
+  {
+    "Key": "FrmMain.Button13",
+    "Text": "Claro"
+  },
+  {
+    "Key": "FrmMain.LabelGroups",
+    "Text": "Grupos:"
+  },
+  {
+    "Key": "FrmMain.Label2",
+    "Text": "Mensaje recibido"
+  },
+  {
+    "Key": "FrmMain.ButtonSchedule",
+    "Text": "Programar envío"
+  },
+  {
+    "Key": "FrmMain.LabelContacts",
+    "Text": "Contactos:"
+  },
+  {
+    "Key": "FrmMain.LabelTotalContacts",
+    "Text": "Total:"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader13",
+    "Text": "Nombre de reglas"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader18",
+    "Text": "Palabras clave"
+  },
+  {
+    "Key": "FrmMain.ColumnHeader14",
+    "Text": "Estado"
+  },
+  {
+    "Key": "FrmMain.ModifyRuleToolStripMenuItem",
+    "Text": "Modificar regla"
+  },
+  {
+    "Key": "FrmMain.DeleteRuleToolStripMenuItem",
+    "Text": "Eliminar regla"
+  },
+  {
+    "Key": "FrmMain.Label1",
+    "Text": "Respuesta automática"
+  },
+  {
+    "Key": "FrmMain.NotifyIcon1",
+    "Text": "NotifyIcon1"
+  },
+  {
+    "Key": "FrmMain.PhotosToolStripMenuItem",
+    "Text": "Fotos"
+  },
+  {
+    "Key": "FrmMain.VideosToolStripMenuItem",
+    "Text": "Videos"
+  },
+  {
+    "Key": "FrmMain.DocumentsToolStripMenuItem",
+    "Text": "Documentos"
+  },
+  {
+    "Key": "FrmMain.StickersToolStripMenuItem",
+    "Text": "Imagen como pegatinas"
+  },
+  {
+    "Key": "FrmMain.SetAutoReplyToolStripMenuItem",
+    "Text": "Establecer respuesta automática"
+  },
+  {
+    "Key": "FrmMain.AddAutoReplyRuleToolStripMenuItem",
+    "Text": "Agregar regla de respuesta automática"
+  },
+  {
+    "Key": "FrmMain.ResetAutoReplyToolStripMenuItem",
+    "Text": "Restablecer respuesta automática"
+  },
+  {
+    "Key": "FrmMain.ExportReceivedMessageToolStripMenuItem",
+    "Text": "Exportar mensaje recibido"
+  },
+  {
+    "Key": "FrmMain.ClearListToolStripMenuItem1",
+    "Text": "Limpiar lista"
+  },
+  {
+    "Key": "FrmMain",
+    "Text": "Remitente de Whatsapp a granel"
+  },
+  {
+    "Key": "FrmManualImports.BtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmManualImports.BtnImport",
+    "Text": "Importar"
+  },
+  {
+    "Key": "FrmManualImports.Label2",
+    "Text": "Introduce contactos"
+  },
+  {
+    "Key": "FrmManualImports.ColumnHeader1",
+    "Text": "Nombre"
+  },
+  {
+    "Key": "FrmManualImports.ColumnHeader2",
+    "Text": "Números"
+  },
+  {
+    "Key": "FrmManualImports.LabelCount",
+    "Text": "Total:"
+  },
+  {
+    "Key": "FrmManualImports.CheckBoxRemoveDuplication",
+    "Text": "Eliminar duplicación"
+  },
+  {
+    "Key": "FrmManualImports.Label1",
+    "Text": "Línea por número, puede nombrar ingresando la coma del nombre y luego el móvil (nombre, número)"
+  },
+  {
+    "Key": "FrmManualImports.Label3",
+    "Text": "Contactos validados"
+  },
+  {
+    "Key": "FrmManualImports.LabelDuplication",
+    "Text": "Duplicación:"
+  },
+  {
+    "Key": "FrmManualImports",
+    "Text": "Importación manual"
+  },
+  {
+    "Key": "FrmMessages",
+    "Text": "FrmMessages."
+  },
+  {
+    "Key": "FrmNumberGenerator.Label1",
+    "Text": "Número de inicio:"
+  },
+  {
+    "Key": "FrmNumberGenerator.Label2",
+    "Text": "Cuenta:"
+  },
+  {
+    "Key": "FrmNumberGenerator.BtnOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmNumberGenerator.BtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmNumberGenerator.Label3",
+    "Text": "Incremento:"
+  },
+  {
+    "Key": "FrmNumberGenerator",
+    "Text": "Generar número"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader1",
+    "Text": "Fecha"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader2",
+    "Text": "Fuente"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader3",
+    "Text": "Mensaje"
+  },
+  {
+    "Key": "FrmReceived.ColumnHeader4",
+    "Text": "Tipo"
+  },
+  {
+    "Key": "FrmReceived",
+    "Text": "Mensajes recibidos"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelReceivedDate",
+    "Text": "Fecha de recepción:"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelSender",
+    "Text": "Remitente:"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelReceivedMessage",
+    "Text": "Mensaje recibido:"
+  },
+  {
+    "Key": "FrmReceivedMessage.LabelReplytoSender",
+    "Text": "Responder al remitente"
+  },
+  {
+    "Key": "FrmReceivedMessage.ButtonSend",
+    "Text": "Enviar"
+  },
+  {
+    "Key": "FrmReceivedMessage.ButtonClose",
+    "Text": "Cerca"
+  },
+  {
+    "Key": "FrmReceivedMessage",
+    "Text": "Mensaje recibido"
+  },
+  {
+    "Key": "FrmRules.ColumnHeader1",
+    "Text": "Nombre del archivo"
+  },
+  {
+    "Key": "FrmRules.ColumnHeader2",
+    "Text": "Tipo"
+  },
+  {
+    "Key": "FrmRules.ColumnHeader3",
+    "Text": "Subtítulo"
+  },
+  {
+    "Key": "FrmRules.SetCaptionToolStripMenuItem",
+    "Text": "Establecer subtítulo"
+  },
+  {
+    "Key": "FrmRules.DeleteToolStripMenuItem1",
+    "Text": "Borrar archivo"
+  },
+  {
+    "Key": "FrmRules.OpenFileToolStripMenuItem",
+    "Text": "Abrir documento"
+  },
+  {
+    "Key": "FrmRules.ButtonOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmRules.ButtonCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmRules.LabelRuleName",
+    "Text": "Nombre de la regla"
+  },
+  {
+    "Key": "FrmRules.LabelKeyword",
+    "Text": "Palabra clave"
+  },
+  {
+    "Key": "FrmRules.LabelMessage",
+    "Text": "Mensaje"
+  },
+  {
+    "Key": "FrmRules.LabelAttachment",
+    "Text": "Adjunto archivo"
+  },
+  {
+    "Key": "FrmRules.ButtonAdd",
+    "Text": "Añadir"
+  },
+  {
+    "Key": "FrmRules.ButtonModify",
+    "Text": "Modificar"
+  },
+  {
+    "Key": "FrmRules.ButtonDelete",
+    "Text": "Eliminar"
+  },
+  {
+    "Key": "FrmRules.ButtonClear",
+    "Text": "Claro"
+  },
+  {
+    "Key": "FrmRules.CheckBoxEnable",
+    "Text": "Habilitar regla"
+  },
+  {
+    "Key": "FrmRules.PhotosToolStripMenuItem",
+    "Text": "Fotos"
+  },
+  {
+    "Key": "FrmRules.VideosToolStripMenuItem",
+    "Text": "Videos"
+  },
+  {
+    "Key": "FrmRules.DocumentsToolStripMenuItem",
+    "Text": "Documentos"
+  },
+  {
+    "Key": "FrmRules.StickersToolStripMenuItem",
+    "Text": "Imagen como pegatinas"
+  },
+  {
+    "Key": "FrmRules",
+    "Text": "Reglas"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader1",
+    "Text": "Nombre"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader3",
+    "Text": "Número"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader2",
+    "Text": "Tipo"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader5",
+    "Text": "Fecha de envío"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader4",
+    "Text": "Estado"
+  },
+  {
+    "Key": "FrmSending.ColumnHeader6",
+    "Text": "Mensaje"
+  },
+  {
+    "Key": "FrmSending.ButtonStop",
+    "Text": "Cerca"
+  },
+  {
+    "Key": "FrmSending.ButtonPause",
+    "Text": "Pausa"
+  },
+  {
+    "Key": "FrmSending.LabelProgress",
+    "Text": "Proceso de envío (0/0)"
+  },
+  {
+    "Key": "FrmSending.ButtonViewLog",
+    "Text": "Exportar"
+  },
+  {
+    "Key": "FrmSending.LabelCountDownHeader",
+    "Text": "Tu volumen comenzará después"
+  },
+  {
+    "Key": "FrmSending.ButtonRetry",
+    "Text": "Procesar de nuevo..."
+  },
+  {
+    "Key": "FrmSending.ExportSuccessfulToolStripMenuItem",
+    "Text": "Exportación exitosa"
+  },
+  {
+    "Key": "FrmSending.ExportAllToolStripMenuItem",
+    "Text": "Exportar todo"
+  },
+  {
+    "Key": "FrmSending",
+    "Text": "Enviando"
+  },
+  {
+    "Key": "FrmSendingMode.ButtonOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmSendingMode.ButtonCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmSendingMode.Label2",
+    "Text": "Cuando programa su volumen, debe mantener la aplicación abierta y también su WhatsApp en su móvil abierto y activado"
+  },
+  {
+    "Key": "FrmSendingMode.Label1",
+    "Text": "Horario de envío"
+  },
+  {
+    "Key": "FrmSendingMode",
+    "Text": "Programar envío"
+  },
+  {
+    "Key": "FrmSendingType.RadioButtonSafeMode",
+    "Text": "Modo seguro"
+  },
+  {
+    "Key": "FrmSendingType.RadioButtonBlindMode",
+    "Text": "Modo ciego"
+  },
+  {
+    "Key": "FrmSendingType.Label1",
+    "Text": "Este modo permite enviar a contactos y grupos seguros, los contactos seguros significan contactos con los que ya ha conversado antes."
+  },
+  {
+    "Key": "FrmSendingType.Label2",
+    "Text": "Se enviará a todos los contactos que importe, independientemente de si es válido o no, el modo ciego no mostrará el estado del mensaje."
+  },
+  {
+    "Key": "FrmSendingType.ButtonOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmSendingType.ButtonCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmSendingType.Label3",
+    "Text": "Selecciona tu modo de envío"
+  },
+  {
+    "Key": "FrmSendingType.Label4",
+    "Text": "Bloque de riesgo bajo"
+  },
+  {
+    "Key": "FrmSendingType.Label6",
+    "Text": "Bloqueo de riesgo alto"
+  },
+  {
+    "Key": "FrmSendingType",
+    "Text": "Modo de envío"
+  },
+  {
+    "Key": "FrmSentCampain.ColumnHeader1",
+    "Text": "Fecha enviada"
+  },
+  {
+    "Key": "FrmSentCampain.ColumnHeader2",
+    "Text": "Contar"
+  },
+  {
+    "Key": "FrmSentCampain",
+    "Text": "Campaña enviada"
+  },
+  {
+    "Key": "FrmSetCaption.BtnOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmSetCaption.BtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmSetCaption.LinkLastName",
+    "Text": "Apellido"
+  },
+  {
+    "Key": "FrmSetCaption.LinkFirstName",
+    "Text": "Nombre de pila"
+  },
+  {
+    "Key": "FrmSetCaption.LinkName",
+    "Text": "Nombre completo"
+  },
+  {
+    "Key": "FrmSetCaption",
+    "Text": "Establecer subtítulo"
+  },
+  {
+    "Key": "FrmSpintax.Label17",
+    "Text": "Spintax generado"
+  },
+  {
+    "Key": "FrmSpintax.Button1",
+    "Text": "Agregar al mensaje"
+  },
+  {
+    "Key": "FrmSpintax.Button2",
+    "Text": "Copiar"
+  },
+  {
+    "Key": "FrmSpintax.Button3",
+    "Text": "Cerca"
+  },
+  {
+    "Key": "FrmSpintax",
+    "Text": "Generador SpinTax"
+  },
+  {
+    "Key": "FrmTheme.BtnCancel",
+    "Text": "Cancelar"
+  },
+  {
+    "Key": "FrmTheme.BtnOK",
+    "Text": "Okay"
+  },
+  {
+    "Key": "FrmTheme.Label2",
+    "Text": "Submenú Color"
+  },
+  {
+    "Key": "FrmTheme.Label1",
+    "Text": "Menú && Botones Color"
+  },
+  {
+    "Key": "FrmTheme.Button9",
+    "Text": "Cuentas"
+  },
+  {
+    "Key": "FrmTheme.Button6",
+    "Text": "Configuraciones"
+  },
+  {
+    "Key": "FrmTheme.Button5",
+    "Text": "Capturador de grupo"
+  },
+  {
+    "Key": "FrmTheme.Button4",
+    "Text": "Filtro de números"
+  },
+  {
+    "Key": "FrmTheme.MnStripMain",
+    "Text": "MenuStrip1"
+  },
+  {
+    "Key": "FrmTheme.FileToolStripMenuItem",
+    "Text": "&Expediente"
+  },
+  {
+    "Key": "FrmTheme.NewBulkToolStripMenuItem",
+    "Text": "Bulto nuevo"
+  },
+  {
+    "Key": "FrmTheme.NewGroupsPostingToolStripMenuItem",
+    "Text": "Publicación de nuevos grupos"
+  },
+  {
+    "Key": "FrmTheme.ImportNumbersToolStripMenuItem",
+    "Text": "Importar números"
+  },
+  {
+    "Key": "FrmTheme.FF2",
+    "Text": "De archivos"
+  },
+  {
+    "Key": "FrmTheme.MM2",
+    "Text": "Manual"
+  },
+  {
+    "Key": "FrmTheme.AA1",
+    "Text": "Generador de números"
+  },
+  {
+    "Key": "FrmTheme.ImportMessageToolStripMenuItem",
+    "Text": "Importar mensaje"
+  },
+  {
+    "Key": "FrmTheme.ExportNumbersToolStripMenuItem",
+    "Text": "Números de exportación"
+  },
+  {
+    "Key": "FrmTheme.SaveMessageToolStripMenuItem",
+    "Text": "Guardar mensaje"
+  },
+  {
+    "Key": "FrmTheme.ExitToolStripMenuItem",
+    "Text": "Salida"
+  },
+  {
+    "Key": "FrmTheme.EditToolStripMenuItem",
+    "Text": "&Editar"
+  },
+  {
+    "Key": "FrmTheme.ClearNumbersListToolStripMenuItem",
+    "Text": "Borrar lista de números"
+  },
+  {
+    "Key": "FrmTheme.ClearMessageToolStripMenuItem",
+    "Text": "Mensaje claro"
+  },
+  {
+    "Key": "FrmTheme.ClearLogToolStripMenuItem",
+    "Text": "Borrar registro"
+  },
+  {
+    "Key": "FrmTheme.ManageToolStripMenuItem",
+    "Text": "Cuentas"
+  },
+  {
+    "Key": "FrmTheme.ManageAccountsToolStripMenuItem",
+    "Text": "Cuentas de administración"
+  },
+  {
+    "Key": "FrmTheme.ToolsToolStripMenuItem",
+    "Text": "Herramientas"
+  },
+  {
+    "Key": "FrmTheme.NumberFilterToolStripMenuItem",
+    "Text": "Filtro de WhatsAppNumber"
+  },
+  {
+    "Key": "FrmTheme.GroupsContactsGrabberToolStripMenuItem",
+    "Text": "Grupos Contactos Grabber"
+  },
+  {
+    "Key": "FrmTheme.SettingsToolStripMenuItem",
+    "Text": "Configuraciones"
+  },
+  {
+    "Key": "FrmTheme.HelpToolStripMenuItem",
+    "Text": "Ayuda"
+  },
+  {
+    "Key": "FrmTheme.ViewHelpToolStripMenuItem",
+    "Text": "Ver ayuda"
+  },
+  {
+    "Key": "FrmTheme.UpdateLicenseToolStripMenuItem",
+    "Text": "Actualizar licencia"
+  },
+  {
+    "Key": "FrmTheme.AboutToolStripMenuItem",
+    "Text": "Acerca de"
+  },
+  {
+    "Key": "FrmTheme.Label4",
+    "Text": "ENVIADOR DE WHATSAPP A GRANEL"
+  },
+  {
+    "Key": "FrmTheme.GroupBox1",
+    "Text": "Avance"
+  },
+  {
+    "Key": "FrmTheme.Button1",
+    "Text": "Reiniciar"
+  },
+  {
+    "Key": "FrmTheme",
+    "Text": "Temas"
+  },
+  {
+    "Key": "You_have_to_add_accounts",
+    "Text": "Tienes que agregar cuentas"
+  },
+  {
+    "Key": "Account_must_be_numeric",
+    "Text": "La cuenta debe ser numérica"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_delete_this_account",
+    "Text": "¿Estás seguro de que deseas eliminar esta cuenta?"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_delete_this_message",
+    "Text": "¿Seguro que quieres borrar este mensaje?"
+  },
+  {
+    "Key": "The_file_that_you_want_to_add_its_already_available_do_you_want_add_it_anyway",
+    "Text": "El archivo que desea agregar ya está disponible, ¿desea agregarlo de todos modos?"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_clear_the_list",
+    "Text": "¿Estás seguro de que quieres borrar la lista?"
+  },
+  {
+    "Key": "No_records_to_exports",
+    "Text": "No hay registros de exportaciones."
+  },
+  {
+    "Key": "WhatsApp_not_Loggged_do_you_want_login",
+    "Text": "WhatsApp no ​​ha iniciado sesión, ¿quieres iniciar sesión?"
+  },
+  {
+    "Key": "Are_you_sure_you_want_clear_this_list",
+    "Text": "¿Estás seguro de que quieres borrar esta lista?"
+  },
+  {
+    "Key": "Are_you_sure_you want_to_stop",
+    "Text": "¿Estás seguro de que quieres parar?"
+  },
+  {
+    "Key": "Empty_list",
+    "Text": "Lista vacía"
+  },
+  {
+    "Key": "The_file_that_you_want_to_add_its_already_available_do_you_want_add_it_anyway",
+    "Text": "El archivo que desea agregar ya está disponible, ¿desea agregarlo de todos modos?"
+  },
+  {
+    "Key": "You_have_enter_Rule_Name",
+    "Text": "Has introducido el nombre de la regla"
+  },
+  {
+    "Key": "You_have_to_enter_keyword",
+    "Text": "Tienes que ingresar la palabra clave"
+  },
+  {
+    "Key": "BWS_LICENSE_ACTIVATED",
+    "Text": "Licencia activada con éxito"
+  },
+  {
+    "Key": "BWS_INVALID_LICENSE",
+    "Text": "Licencia invalida"
+  },
+  {
+    "Key": "BWS_VALID_UNTILL",
+    "Text": "Licencia valida hasta"
+  },
+  {
+    "Key": "Your_bulk_has_been_done",
+    "Text": "Tu bulto ha sido hecho"
+  },
+  {
+    "Key": "Messages.CLEAR_LIST",
+    "Text": "¿Estás seguro de que quieres borrar esta lista?"
+  },
+  {
+    "Key": "Messages.DELETE_NUMBER",
+    "Text": "¿Estás seguro de que deseas eliminar este número?"
+  },
+  {
+    "Key": "No_destination_to_send",
+    "Text": "No hay destino para enviar"
+  },
+  {
+    "Key": "No_content_or_material_to_send",
+    "Text": "No hay contenido o material para enviar"
+  },
+  {
+    "Key": "BWS_CLEAR_LOG",
+    "Text": "¿Quieres borrar el registro?"
+  },
+  {
+    "Key": "Are_you_sure_you_want_to_clear_attachment_list",
+    "Text": "¿Estás seguro de que deseas borrar la lista de archivos adjuntos?"
+  },
+  {
+    "Key": "WhatsApp_not_ready_please_wait_and_check",
+    "Text": "WhatsApp no ​​está listo, espere y verifique."
+  },
+  {
+    "Key": "No_destination_to_send",
+    "Text": "No hay destino para enviar"
+  },
+  {
+    "Key": "No_content_or_material_to_send",
+    "Text": "No hay contenido o material para enviar"
+  },
+  {
+    "Key": "Are_you_Sure_you_want_to_delete_rule",
+    "Text": "¿Seguro que quieres eliminar esta regla?"
+  },
+  {
+    "Key": "Auto_reply_has_been_rested",
+    "Text": "La respuesta automática se ha restablecido y todas las cuentas recibirán mensajes de respuesta automática"
+  },
+  {
+    "Key": "Are_you_sure_you_want_start_new_bulk",
+    "Text": "¿Estás seguro de que quieres comenzar un nuevo lote?"
+  },
+  {
+    "Key": "BWS_CLOSE_APPLICATION",
+    "Text": "¿Estás seguro de que quieres cerrar la aplicación?"
+  }
+]

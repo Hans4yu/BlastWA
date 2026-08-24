@@ -1,0 +1,95 @@
+<h1 class="page-title">Templates</h1>
+<p class="page-subtitle">Reusable message templates with tags</p>
+
+<div class="flex-between" style="margin-bottom:16px">
+  <input type="text" id="tpl-search" placeholder="Search name or tag..." style="max-width:320px" />
+  <button class="btn" onclick="openNewTpl()">+ New Template</button>
+</div>
+
+<div id="tpl-editor" class="card" style="display:none">
+  <h3 id="tpl-editor-title">New Template</h3>
+  <div class="field"><label>Name</label><input type="text" id="tpl-name" /></div>
+  <div class="field"><label>Tags (comma separated)</label><input type="text" id="tpl-tags" placeholder="promo,sales" /></div>
+  <div class="field"><label>Body — supports spintax & variables</label><textarea id="tpl-body"></textarea></div>
+  <div class="row">
+    <button class="btn" onclick="saveTpl()">Save</button>
+    <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
+  </div>
+</div>
+
+<div class="grid grid-cards" id="tpl-grid">
+  <div class="empty-state">Loading templates...</div>
+</div>
+
+<script>
+  let editingId = null;
+
+  window.init_templates = async function () {
+    const { invoke } = window.blastwa;
+    document.getElementById('tpl-search').addEventListener('input', refresh);
+    await refresh();
+  };
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
+
+  async function refresh() {
+    const { invoke } = window.blastwa;
+    const q = document.getElementById('tpl-search').value;
+    const res = q ? await invoke('search_templates', { query: q }) : await invoke('list_templates');
+    const tpls = Array.isArray(res) ? res : [];
+
+    const grid = document.getElementById('tpl-grid');
+    grid.innerHTML = tpls.length ? tpls.map((t) => `
+      <div class="card">
+        <div class="flex-between">
+          <h3 style="margin:0">${esc(t.name)}</h3>
+        </div>
+        <p>${(t.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</p>
+        <p style="color:var(--text-dim);font-size:12px;margin:10px 0;min-height:32px">
+          ${esc(String(t.body || '').slice(0, 100))}${String(t.body).length > 100 ? '...' : ''}
+        </p>
+        <div class="row">
+          <button class="btn btn-sm"
+            onclick='window.blastwa.invoke("load_to_composer", ${JSON.stringify(JSON.stringify(t))}).then(()=>location.hash="#/sending")'>
+            Load to Composer
+          </button>
+          <span class="spacer"></span>
+          <button class="btn btn-sm btn-danger"
+            onclick="window.blastwa.invoke('delete_template', { id: '${t.id}' }).then(refresh)">
+            Delete
+          </button>
+        </div>
+      </div>`).join('')
+      : '<div class="empty-state">No templates found.</div>';
+  }
+
+  function openNewTpl() {
+    editingId = null;
+    document.getElementById('tpl-editor-title').textContent = 'New Template';
+    document.getElementById('tpl-name').value = '';
+    document.getElementById('tpl-tags').value = '';
+    document.getElementById('tpl-body').value = '';
+    document.getElementById('tpl-editor').style.display = '';
+  }
+
+  function closeEditor() {
+    document.getElementById('tpl-editor').style.display = 'none';
+  }
+
+  async function saveTpl() {
+    const { invoke } = window.blastwa;
+    const payload = {
+      id: editingId,
+      name: document.getElementById('tpl-name').value,
+      tags: document.getElementById('tpl-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+      body: document.getElementById('tpl-body').value,
+    };
+    await invoke('save_template', payload);
+    closeEditor();
+    refresh();
+  }
+</script>

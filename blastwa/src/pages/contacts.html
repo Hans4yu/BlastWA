@@ -1,0 +1,83 @@
+<h1 class="page-title">Contacts</h1>
+<p class="page-subtitle">Import and manage your blast contact list</p>
+
+<div class="card">
+  <div class="flex-between">
+    <div>
+      <button class="btn" onclick="document.getElementById('import-file').click()">Import .txt / .csv / .xlsx</button>
+      <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
+        style="display:none" onchange="handleImport(this)" />
+    </div>
+    <label class="checkbox-label">
+      <input type="checkbox" id="remove-dupes" checked />
+      Remove duplicates
+    </label>
+  </div>
+  <p style="margin-top:8px;color:var(--text-dim);font-size:12px">
+    .txt format: <span class="mono">number|fullname|var1|var2|var3|var4|var5</span> (one per line, extra columns optional)
+  </p>
+</div>
+
+<div class="card table-wrap">
+  <div class="flex-between" style="margin-bottom:10px">
+    <h3 style="margin:0">Contact List — <span id="total-count">0</span> total</h3>
+    <button class="btn btn-sm btn-danger" onclick="clearAll()">Clear List</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Number</th><th>Full Name</th><th>Var1</th><th>Var2</th><th>Var3</th><th>Var4</th><th>Var5</th></tr>
+    </thead>
+    <tbody id="contacts-body"></tbody>
+  </table>
+  <div class="empty-state" id="contacts-empty">No contacts loaded. Import a file to get started.</div>
+</div>
+
+<script>
+  window.init_contacts = async function () {
+    const { invoke } = window.blastwa;
+    await refresh();
+  };
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
+
+  async function refresh() {
+    const { invoke } = window.blastwa;
+    const res = await invoke('get_contacts');
+    const list = Array.isArray(res) ? res : (res.contacts || []);
+
+    document.getElementById('total-count').textContent = list.length;
+    document.getElementById('contacts-empty').style.display = list.length ? 'none' : '';
+    document.getElementById('contacts-body').innerHTML = list.map((c, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td class="mono">${esc(c.number)}</td>
+        <td>${esc(c.fullname)}</td>
+        <td>${esc(c.var1)}</td><td>${esc(c.var2)}</td><td>${esc(c.var3)}</td>
+        <td>${esc(c.var4)}</td><td>${esc(c.var5)}</td>
+      </tr>`).join('');
+  }
+
+  async function handleImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const { invoke } = window.blastwa;
+    const removeDupes = document.getElementById('remove-dupes').checked;
+    // in tauri v2, pass the file path; in mock mode just show intent
+    const path = file.path || file.name;
+    const res = await invoke('import_contacts', { path, removeDupes });
+    if (res.mock) alert(`[mock] would import ${path}`);
+    await refresh();
+    input.value = '';
+  }
+
+  async function clearAll() {
+    if (!confirm('Clear entire contact list?')) return;
+    await window.blastwa.invoke('clear_contacts');
+    refresh();
+  }
+</script>

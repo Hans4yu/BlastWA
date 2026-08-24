@@ -1,0 +1,80 @@
+<h1 class="page-title">Message Log</h1>
+<p class="page-subtitle">Campaign send history</p>
+
+<div class="card">
+  <div class="flex-between" style="margin-bottom:12px">
+    <select id="log-filter" style="max-width:200px">
+      <option value="">All statuses</option>
+      <option value="sent">Sent only</option>
+      <option value="failed">Failed only</option>
+      <option value="pending">Pending only</option>
+    </select>
+    <div>
+      <button class="btn btn-secondary btn-sm" onclick="exportLog('csv')">Export CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportLog('xlsx')">Export Excel</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Number</th><th>Full Name</th><th>Status</th><th>Error Reason</th></tr>
+      </thead>
+      <tbody id="log-body"></tbody>
+    </table>
+    <div class="empty-state" id="log-empty">No log entries yet.</div>
+  </div>
+</div>
+
+<script>
+  window.init_log = async function () {
+    const { invoke, listen } = window.blastwa;
+    document.getElementById('log-filter').addEventListener('change', refresh);
+    await refresh();
+
+    await listen('campaign_progress', () => refresh());
+    await listen('message_log', (ev) => {
+      const p = ev.payload || ev;
+      appendRow(p);
+    });
+  };
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
+
+  async function refresh() {
+    const { invoke } = window.blastwa;
+    const status = document.getElementById('log-filter').value;
+    const res = await invoke('get_logs', { status });
+    const entries = Array.isArray(res) ? res : [];
+
+    document.getElementById('log-empty').style.display = entries.length ? 'none' : '';
+    document.getElementById('log-body').innerHTML = entries.map(rowHtml).join('');
+  }
+
+  function rowHtml(e) {
+    const cls = e.status === 'sent' ? 'badge-green'
+      : e.status === 'failed' ? 'badge-red' : 'badge-yellow';
+    const ts = e.timestamp ? new Date(e.timestamp).toLocaleString() : (e.time || '');
+    return `<tr>
+      <td>${esc(ts)}</td>
+      <td class="mono">${esc(e.number)}</td>
+      <td>${esc(e.fullname)}</td>
+      <td><span class="badge ${cls}">${esc(e.status)}</span></td>
+      <td>${esc(e.error_reason || '')}</td>
+    </tr>`;
+  }
+
+  function appendRow(e) {
+    document.getElementById('log-empty').style.display = 'none';
+    document.getElementById('log-body').insertAdjacentHTML('afterbegin', rowHtml(e));
+  }
+
+  async function exportLog(format) {
+    const { invoke } = window.blastwa;
+    await invoke('export_log', { format });
+  }
+</script>

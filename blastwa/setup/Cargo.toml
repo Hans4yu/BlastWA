@@ -1,0 +1,14 @@
+[package]
+name = "blastwa-setup"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+winreg = "0.52"
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+
+[package.metadata.notes]
+purpose = "detects user Chrome, writes config, launches blastwa.exe"

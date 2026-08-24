@@ -1,0 +1,114 @@
+<h1 class="page-title">Settings</h1>
+<p class="page-subtitle">App configuration</p>
+
+<div class="grid grid-forms">
+  <div class="card">
+    <h3>Chrome Runtime</h3>
+    <div class="field">
+      <label>Detected Chrome path (set by setup.exe)</label>
+      <input type="text" id="chrome-path" readonly />
+    </div>
+    <div class="field">
+      <label>Chrome version</label>
+      <input type="text" id="chrome-version" readonly />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Default Delays</h3>
+    <div class="row">
+      <div class="field">
+        <label>Delay min (sec)</label>
+        <input type="number" id="delay-min" min="1" />
+      </div>
+      <div class="field">
+        <label>Delay max (sec)</label>
+        <input type="number" id="delay-max" min="2" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Human Mode default preset</label>
+      <select id="human-preset">
+        <option value="off">Off</option>
+        <option value="natural">Natural</option>
+        <option value="cautious">Cautious</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>WPP.js Engine</h3>
+    <div class="field">
+      <label>Installed version</label>
+      <input type="text" id="wpp-version" readonly placeholder="bundled (no local version)" />
+    </div>
+    <button class="btn btn-sm" id="btn-check-wpp">Check for Update</button>
+    <p id="wpp-status" style="margin-top:8px;color:var(--text-dim);font-size:12px"></p>
+  </div>
+
+  <div class="card">
+    <h3>Local API / Webhook Mode</h3>
+    <div class="field checkbox-label">
+      <input type="checkbox" id="api-enabled" />
+      <label for="api-enabled">Enable REST API (localhost only — never exposed to network)</label>
+    </div>
+    <div class="field">
+      <label>Port</label>
+      <input type="number" id="api-port" value="8765" min="1024" max="65535" />
+    </div>
+    <pre class="code-block mono">curl -X POST http://127.0.0.1:8765/api/blast \
+  -H "Content-Type: application/json" \
+  -d '{"account":"akun1","contacts":["6281234567890"],
+       "message":"Hai [[firstname]]!","delay_min_s":3,"delay_max_s":9}'
+
+curl http://127.0.0.1:8765/api/status
+curl -X POST http://127.0.0.1:8765/api/stop</pre>
+  </div>
+</div>
+
+<div style="margin-top:16px">
+  <button class="btn" onclick="saveSettings()">Save Settings</button>
+</div>
+
+<script>
+  window.init_settings = async function () {
+    const { invoke } = window.blastwa;
+    const $ = (id) => document.getElementById(id);
+
+    const cfg = await invoke('get_config');
+    $('chrome-path').value = cfg.chrome_path || '(run blastwa-setup.exe)';
+    $('chrome-version').value = cfg.chrome_version || '';
+    $('delay-min').value = cfg.default_delay_min ?? 5;
+    $('delay-max').value = cfg.default_delay_max ?? 12;
+    $('human-preset').value = cfg.human_mode_preset || 'natural';
+    $('api-enabled').checked = !!cfg.api_enabled;
+    $('api-port').value = cfg.api_port ?? 8765;
+
+    const wpp = await invoke('get_wpp_version');
+    $('wpp-version').value = wpp.version || 'bundled';
+
+    $('btn-check-wpp').onclick = async () => {
+      $('wpp-status').textContent = 'Checking...';
+      const r = await invoke('check_wpp_update');
+      $('wpp-status').textContent = r.message || JSON.stringify(r);
+    };
+  };
+
+  async function saveSettings() {
+    const { invoke } = window.blastwa;
+    const $ = (id) => document.getElementById(id);
+    await invoke('save_config', {
+      config: {
+        chrome_path: $('chrome-path').value,
+        chrome_version: $('chrome-version').value,
+        default_delay_min: Number($('delay-min').value),
+        default_delay_max: Number($('delay-max').value),
+        human_mode_preset: $('human-preset').value,
+        api_enabled: $('api-enabled').checked,
+        api_port: Number($('api-port').value),
+      },
+    });
+    alert('Settings saved.');
+  }
+</script>

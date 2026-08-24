@@ -1,0 +1,59 @@
+<div class="flex-between">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">WhatsApp account sessions status</p>
+  </div>
+  <button class="btn" onclick="window.blastwa.invoke('add_account', { name: prompt('Account name:') })">
+    + Add Account
+  </button>
+</div>
+
+<div class="grid grid-cards" id="accounts-grid">
+  <div class="empty-state">Loading accounts...</div>
+</div>
+
+<script>
+  window.init_dashboard = async function () {
+    const { invoke } = window.blastwa;
+    const grid = document.getElementById('accounts-grid');
+
+    const res = await invoke('list_accounts');
+    const accounts = Array.isArray(res) ? res : (res.accounts || []);
+
+    if (!accounts.length) {
+      grid.innerHTML = `<div class="empty-state card">No accounts yet. Click "+ Add Account" to scan a QR code.</div>`;
+      return;
+    }
+
+    grid.innerHTML = accounts.map((a) => `
+      <div class="card">
+        <div class="flex-between">
+          <h3>${escapeHtml(a.name)}</h3>
+          <span class="badge ${a.connected ? 'badge-green' : 'badge-red'}">
+            ${a.connected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+        <p class="mono" style="margin:8px 0;color:var(--text-dim)">
+          port: ${a.port} · ${escapeHtml(a.number || 'not scanned')}
+        </p>
+        <div class="row">
+          <button class="btn btn-sm btn-secondary"
+            onclick="window.blastwa.invoke('open_browser', { name: '${escapeHtml(a.name)}' })">
+            Open Browser
+          </button>
+          <span class="spacer"></span>
+          <button class="btn btn-sm btn-danger"
+            onclick="if(confirm('Remove account ${escapeHtml(a.name)}?')) window.blastwa.invoke('remove_account', { name: '${escapeHtml(a.name)}' })">
+            Remove
+          </button>
+        </div>
+      </div>
+    `).join('');
+  };
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
+</script>

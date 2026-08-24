@@ -1,0 +1,120 @@
+<h1 class="page-title">Sending</h1>
+<p class="page-subtitle">Compose and launch a blast campaign</p>
+
+<div class="grid grid-forms">
+  <div class="card">
+    <h3>Message</h3>
+    <div class="field">
+      <label>Message body — supports spintax {a|b} and [[firstname]] variables</label>
+      <textarea id="msg-body" placeholder="Hai [[firstname]]! Dapat promo {spesial|keren} nih..."></textarea>
+    </div>
+    <div class="field">
+      <label>Attachment (image / pdf / video / audio)</label>
+      <input type="file" id="attachment" />
+    </div>
+    <div class="field">
+      <label>Caption (for attachments)</label>
+      <input type="text" id="caption" placeholder="optional caption" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Campaign Settings</h3>
+    <div class="field">
+      <label>Account</label>
+      <select id="account-select"><option value="">Default</option></select>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Delay min (sec)</label>
+        <input type="number" id="delay-min" value="3" min="1" />
+      </div>
+      <div class="field">
+        <label>Delay max (sec)</label>
+        <input type="number" id="delay-max" value="9" min="2" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Human Mode preset</label>
+      <select id="human-preset">
+        <option value="off">Off (flat delay, like original app)</option>
+        <option value="natural" selected>Natural (recommended)</option>
+        <option value="cautious">Cautious (slow & safe)</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="field checkbox-label">
+      <input type="checkbox" id="safe-mode" />
+      <label for="safe-mode">Safe mode (verify chat exists before send)</label>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="flex-between">
+    <span id="contact-count"><b>0</b> contacts loaded</span>
+    <div>
+      <button class="btn btn-secondary" id="btn-preview-spintax">Preview Spintax</button>
+      <button class="btn" id="btn-start">Start Campaign</button>
+      <button class="btn btn-secondary" id="btn-pause">Pause</button>
+      <button class="btn btn-danger" id="btn-stop">Stop</button>
+    </div>
+  </div>
+
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+  <div class="counters">
+    <span>Sent: <b id="c-sent" class="status-sent">0</b></span>
+    <span>Failed: <b id="c-failed" class="status-failed">0</b></span>
+    <span>Pending: <b id="c-pending" class="status-pending">0</b></span>
+    <span id="current-status"></span>
+  </div>
+</div>
+
+<script>
+  window.init_sending = async function () {
+    const { invoke, listen } = window.blastwa;
+    const $ = (id) => document.getElementById(id);
+
+    const contacts = await invoke('get_contacts');
+    const count = Array.isArray(contacts) ? contacts.length : (contacts.count ?? 0);
+    $('contact-count').innerHTML = `<b>${count}</b> contacts loaded`;
+
+    const accounts = await invoke('list_accounts');
+    const list = Array.isArray(accounts) ? accounts : [];
+    if (list.length) {
+      $('account-select').innerHTML = list
+        .map((a) => `<option value="${a.name}">${a.name}</option>`)
+        .join('');
+    }
+
+    $('btn-start').onclick = () => invoke('start_campaign', {
+      message: $('msg-body').value,
+      account: $('account-select').value,
+      delayMinS: Number($('delay-min').value),
+      delayMaxS: Number($('delay-max').value),
+      humanPreset: $('human-preset').value,
+      isSafeMode: $('safe-mode').checked,
+    });
+
+    $('btn-pause').onclick = () => invoke('pause_campaign');
+    $('btn-stop').onclick = () => invoke('stop_campaign');
+
+    $('btn-preview-spintax').onclick = async () => {
+      const r = await invoke('preview_spintax', { text: $('msg-body').value });
+      const previews = Array.isArray(r) ? r : (r.previews || []);
+      alert(previews.map((p, i) => `${i + 1}. ${p}`).join('\n') || 'no preview available');
+    };
+
+    await listen('campaign_progress', (ev) => {
+      const p = ev.payload || ev;
+      $('c-sent').textContent = p.sent ?? 0;
+      $('c-failed').textContent = p.failed ?? 0;
+      $('c-pending').textContent = p.pending ?? 0;
+      const total = (p.sent ?? 0) + (p.failed ?? 0) + (p.pending ?? 0);
+      const pct = total ? (((p.sent ?? 0) + (p.failed ?? 0)) / total) * 100 : 0;
+      $('progress-fill').style.width = pct.toFixed(1) + '%';
+      $('current-status').textContent = p.current_number
+        ? `last: ${p.current_number} (${p.status})` : '';
+    });
+  };
+</script>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BlastWA</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">B</div>
+        <div class="brand-name">BlastWA</div>
+      </div>
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-page="dashboard">🏠 Dashboard</button>
+        <button class="nav-item" data-page="sending">🚀 Sending</button>
+        <button class="nav-item" data-page="contacts">👥 Contacts</button>
+        <button class="nav-item" data-page="groups">👨‍👩‍👧‍👦 Groups</button>
+        <button class="nav-item" data-page="autoreply">🤖 Auto Reply</button>
+        <button class="nav-item" data-page="templates">📝 Templates</button>
+        <button class="nav-item" data-page="log">📋 Log</button>
+        <button class="nav-item" data-page="settings">⚙️ Settings</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span style="font-size:11px;color:var(--text-dim)">v0.1.0 · no license · ever</span>
+      </div>
+    </aside>
+
+    <main class="content" id="content">
+      <!-- pages load here -->
+    </main>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

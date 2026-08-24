@@ -1,0 +1,118 @@
+// local REST API server (U14): axum bound to 127.0.0.1 only.
+// lets external systems trigger blasts without opening the UI.
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+use anyhow::Result;
+use axum::{
+    extract::State,
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone)]
+pub struct AppState {
+    pub running: Arc<AtomicBool>,
+    pub sent: Arc<std::sync::atomic::AtomicU32>,
+    pub failed: Arc<std::sync::atomic::AtomicU32>,
+    /// set by the gui layer: triggers campaign start through the normal pipeline
+    pub blast_requested: Arc<tokio::sync::mpsc::Sender<BlastRequest>>,
+    pub stop_flag: Arc<tokio_util::sync::CancellationToken>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BlastRequest {
+    pub account: String,
+    pub contacts: Vec<String>,
+    pub message: String,
+    #[serde(default = "default_delay_min")]
+    pub delay_min_s: f64,
+    #[serde(default = "default_delay_max")]
+    pub delay_max_s: f64,
+}
+
+fn default_delay_min() -> f64 {
+    3.0
+}
+
+fn default_delay_max() -> f64 {
+    9.0
+}
+
+#[derive(Serialize)]
+struct ApiResponse<T> {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+fn ok<T>(data: T) -> (StatusCode, Json<ApiResponse<T>>) {
+    (
+        StatusCode::OK,
+        Json(ApiResponse { ok: true, data: Some(data), error: None }),
+    )
+}
+
+fn err<T>(msg: &str, code: StatusCode) -> (StatusCode, Json<ApiResponse<T>>) {
+    (code, Json(ApiResponse { ok: false, data: None, error: Some(msg.into()) }))
+}
+
+async fn blast(
+    State(state): State<AppState>,
+    Json(req): Json<BlastRequest>,
+) -> (StatusCode, Json<ApiResponse<String>>) {
+    if state.running.load(Ordering::Relaxed) {
+        return err::<String>("campaign already running", StatusCode::CONFLICT);
+    }
+    if req.contacts.is_empty() || req.message.is_empty() {
+        return err::<String>(
+            "contacts and message are required",
+            StatusCode::BAD_REQUEST,
+        );
+    }
+    match state.blast_requested.clone().send(req).await {
+        Ok(_) => ok("campaign queued".into()),
+        Err(_) => err::<String>("internal dispatch failed", StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn status(State(state): State<AppState>) -> (StatusCode, Json<ApiResponse<StatusData>>) {
+    let data = StatusData {
+        running: state.running.load(Ordering::Relaxed),
+        sent: state.sent.load(Ordering::Relaxed),
+        failed: state.failed.load(Ordering::Relaxed),
+    };
+    ok(data)
+}
+
+#[derive(Serialize)]
+struct StatusData {
+    running: bool,
+    sent: u32,
+    failed: u32,
+}
+
+async fn stop(State(state): State<AppState>) -> (StatusCode, Json<ApiResponse<String>>) {
+    state.stop_flag.cancel();
+    ok("stop requested".into())
+}
+
+/// bind loopback ONLY — never 0.0.0.0. enforced here in code, not config.
+pub async fn serve(port: u16, state: AppState) -> Result<()> {
+    let app = Router::new()
+        .route("/api/blast", post(blast))
+        .route("/api/status", get(status))
+        .route("/api/stop", post(stop))
+        .with_state(state);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    log::info!("local api listening on http://{addr}");
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}

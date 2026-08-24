@@ -1,0 +1,65 @@
+<h1 class="page-title">Auto Reply</h1>
+<p class="page-subtitle">Keyword-based auto responder rules</p>
+
+<div class="card">
+  <div class="flex-between">
+    <h3 style="margin:0">Rules</h3>
+    <button class="btn btn-sm" onclick="addRuleRow()">+ Add Rule</button>
+  </div>
+  <br />
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Enabled</th><th>Name</th><th>Match Type</th><th>Keyword</th><th>Reply Message</th><th></th></tr>
+      </thead>
+      <tbody id="rules-body"></tbody>
+    </table>
+    <div class="empty-state" id="rules-empty">No rules yet. Add one to start auto-replying.</div>
+  </div>
+</div>
+
+<script>
+  window.init_autoreply = async function () {
+    const { invoke } = window.blastwa;
+    const $ = (id) => document.getElementById(id);
+
+    window.addRuleRow = function () {
+      $('rules-empty').style.display = 'none';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="checkbox" class="r-enabled" checked /></td>
+        <td><input type="text" class="r-name" placeholder="Rule name" /></td>
+        <td>
+          <select class="r-match">
+            <option value="contains">Contains</option>
+            <option value="like">Like (exact)</option>
+            <option value="start_with">Start With</option>
+            <option value="end_with">End With</option>
+          </select>
+        </td>
+        <td><input type="text" class="r-keyword" placeholder="promo" /></td>
+        <td><input type="text" class="r-reply" placeholder="Thanks for your interest!" /></td>
+        <td><button class="btn btn-sm btn-danger" onclick="this.closest('tr').remove(); syncEmpty()">Delete</button></td>`;
+      $('rules-body').appendChild(tr);
+    };
+
+    window.syncEmpty = function () {
+      $('rules-empty').style.display =
+        $('rules-body').children.length ? 'none' : '';
+    };
+
+    const res = await invoke('load_rules');
+    const rules = Array.isArray(res) ? res : [];
+    rules.forEach((r) => {
+      addRuleRow();
+      const last = $('rules-body').lastElementChild;
+      last.querySelector('.r-enabled').checked = r.enabled ?? true;
+      last.querySelector('.r-name').value = r.name || '';
+      last.querySelector('.r-match').value =
+        (r.match_type || 'contains').toLowerCase();
+      last.querySelector('.r-keyword').value = r.keyword || '';
+      last.querySelector('.r-reply').value = r.reply_message || '';
+    });
+    syncEmpty();
+  };
+</script>

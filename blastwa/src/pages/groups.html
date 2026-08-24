@@ -1,0 +1,44 @@
+<h1 class="page-title">Groups</h1>
+<p class="page-subtitle">Grab WhatsApp group participants into your contact list</p>
+
+<div class="card table-wrap">
+  <table>
+    <thead>
+      <tr><th>Group Name</th><th>Group ID</th><th style="width:200px">Actions</th></tr>
+    </thead>
+    <tbody id="groups-body"></tbody>
+  </table>
+  <div class="empty-state" id="groups-empty">Loading groups... make sure an account is connected.</div>
+</div>
+
+<script>
+  window.init_groups = async function () {
+    const { invoke } = window.blastwa;
+    const $ = (id) => document.getElementById(id);
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[c]);
+    }
+
+    async function refresh() {
+      const res = await invoke('list_groups');
+      const groups = Array.isArray(res) ? res : [];
+      $('groups-empty').style.display = groups.length ? 'none' : '';
+      $('groups-body').innerHTML = groups.map((g) => `
+        <tr>
+          <td>${esc(g.name)}</td>
+          <td class="mono">${esc(g.id)}</td>
+          <td>
+            <button class="btn btn-sm"
+              onclick="window.blastwa.invoke('grab_participants', { groupId: '${esc(g.id)}' }).then(r => alert('Grabbed ' + ((r.count) ?? r.length ?? 0) + ' participants'))">
+              Grab Participants
+            </button>
+          </td>
+        </tr>`).join('');
+    }
+
+    await refresh();
+  };
+</script>
