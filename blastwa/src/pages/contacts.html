@@ -17,7 +17,7 @@
   <div class="panel-body">
     <div class="flex-between">
       <div class="row">
-        <button class="btn" onclick="document.getElementById('import-file').click()">Import .txt / .csv / .xlsx</button>
+        <button class="btn" onclick="pickAndImport()">Import .txt / .csv / .xlsx</button>
         <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
           style="display:none" onchange="handleImport(this)" />
         <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
@@ -83,16 +83,45 @@
       </tr>`).join('');
   }
 
+  async function importFromPath(path, removeDupes) {
+    const { invoke } = window.blastwa;
+    try {
+      const res = await invoke('import_contacts', { path, removeDupes });
+      if (res && res.mock) {
+        alert(`[mock] would import ${path}`);
+      } else if (res && res.imported === 0) {
+        alert('File read, but 0 valid contacts found. Check the format: number|name|var1|... one per line (or CSV with a number column).');
+      }
+      await refresh();
+    } catch (e) {
+      // never fail silently again
+      alert('Import failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  async function pickAndImport() {
+    const removeDupes = document.getElementById('remove-dupes').checked;
+    const tauriDialog = window.__TAURI__ && window.__TAURI__.dialog;
+    if (tauriDialog) {
+      // tauri v2: the web <input type=file> hides the real path, so ask the
+      // dialog plugin for it instead
+      const path = await tauriDialog.open({
+        multiple: false,
+        title: 'Import contacts',
+        filters: [{ name: 'Contacts', extensions: ['txt', 'csv', 'xlsx', 'xls'] }],
+      });
+      if (!path) return;
+      await importFromPath(path, removeDupes);
+    } else {
+      // plain browser dev: labeled mock path via the hidden input
+      document.getElementById('import-file').click();
+    }
+  }
+
   async function handleImport(input) {
     const file = input.files[0];
     if (!file) return;
-    const { invoke } = window.blastwa;
-    const removeDupes = document.getElementById('remove-dupes').checked;
-    // in tauri v2, pass the file path; in mock mode just show intent
-    const path = file.path || file.name;
-    const res = await invoke('import_contacts', { path, removeDupes });
-    if (res.mock) alert(`[mock] would import ${path}`);
-    await refresh();
+    await importFromPath(file.name, document.getElementById('remove-dupes').checked);
     input.value = '';
   }
 

@@ -37,12 +37,31 @@ impl ContactList {
             if line.is_empty() {
                 continue;
             }
-            let parts: Vec<&str> = line.split('|').map(|p| p.trim()).collect();
-            let number = normalize_number(parts.first().copied().unwrap_or(""));
+            // tolerate | , ; and tab separators; auto-detect which column
+            // holds the number (files often come as "name,628..." from excel)
+            let parts: Vec<&str> = line
+                .split(|c| c == '|' || c == ',' || c == ';' || c == '\u{0009}')
+                .map(|p| p.trim())
+                .filter(|p| !p.is_empty())
+                .collect();
+            // number column = first column with >= 8 digits; when none
+            // qualifies, fall back to column 0 (legacy number-first files)
+            let number_idx = parts
+                .iter()
+                .enumerate()
+                .find(|(_, v)| normalize_number(v).chars().count() >= 8)
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            let number = normalize_number(parts[number_idx]);
             if number.is_empty() {
                 continue;
             }
-            let fullname = parts.get(1).copied().unwrap_or("");
+            let fullname = parts
+                .iter()
+                .enumerate()
+                .find(|(i, _)| *i != number_idx)
+                .map(|(_, v)| *v)
+                .unwrap_or("");
             let mut row = ContactRow::from_fullname(&number, fullname);
             for (i, slot) in [&mut row.var1, &mut row.var2, &mut row.var3, &mut row.var4, &mut row.var5]
                 .iter_mut()
@@ -94,6 +113,31 @@ fn decode_text(bytes: &[u8]) -> String {
             let (s, _, _) = encoding_rs::WINDOWS_1252.decode(bytes);
             s.into_owned()
         }
+    }
+}
+
+#[cfg(test)]
+mod tolerant_txt_tests {
+    use super::*;
+
+    #[test]
+    fn load_txt_tolerant() {
+        let dir = std::env::temp_dir().join("bw_txt_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("c.txt");
+        std::fs::write(&f, "Farhan,6282132102060
+6282240004560|Budi|var1
+ Siti ; 6281234567890 
+").unwrap();
+        let list = ContactList::load_txt(&f).unwrap();
+        assert_eq!(list.contacts.len(), 3);
+        assert_eq!(list.contacts[0].number, "6282132102060");
+        assert_eq!(list.contacts[0].fullname, "Farhan");
+        assert_eq!(list.contacts[1].number, "6282240004560");
+        assert_eq!(list.contacts[1].fullname, "Budi");
+        assert_eq!(list.contacts[1].var1, "var1");
+        assert_eq!(list.contacts[2].number, "6281234567890");
+        assert_eq!(list.contacts[2].fullname, "Siti");
     }
 }
 

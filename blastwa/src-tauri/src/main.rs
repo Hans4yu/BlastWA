@@ -706,6 +706,7 @@ fn main() {
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(ctx)
         .invoke_handler(tauri::generate_handler![
             list_accounts, add_account, remove_account, open_browser,
