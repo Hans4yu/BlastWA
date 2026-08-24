@@ -17,7 +17,7 @@ regex = { workspace = true }
 base64 = { workspace = true }
 tokio = { workspace = true }
 tokio-util = "0.7"
-chromiumoxide = { version = "0.7", features = ["tokio-runtime"] }
+chromiumoxide = { version = "0.9" }
 reqwest = { version = "0.12", features = ["json", "multipart"] }
 futures = "0.3"
 dirs = "5"

@@ -17,6 +17,7 @@ pub struct AccountSession {
     handler_task: tokio::task::JoinHandle<()>,
 }
 
+#[derive(Clone)]
 pub struct SessionManager {
     pub accounts_dir: PathBuf,
     pub chrome_path: String,

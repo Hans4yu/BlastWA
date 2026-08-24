@@ -123,7 +123,7 @@ async fn download(url: &str) -> Result<Vec<u8>> {
 
 async fn download_from_cdn(tag: &str) -> Result<Vec<u8>> {
     // wa-js publishes dist on unpkg per version
-    let url = format!("https://unpkg.com/@wppconnect/wa-js@{tag}/dist/wpp.js");
+    let url = format!("https://unpkg.com/@wppconnect/wa-js@{tag}/dist/wppconnect-wa.js");
     download(&url).await
 }
 

@@ -5,3 +5,4 @@ pub mod group_grabber;
 pub mod human_behavior;
 pub mod import;
 pub mod log_exporter;
+pub mod pipeline;

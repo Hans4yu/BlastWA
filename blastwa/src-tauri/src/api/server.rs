@@ -20,7 +20,8 @@ pub struct AppState {
     pub failed: Arc<std::sync::atomic::AtomicU32>,
     /// set by the gui layer: triggers campaign start through the normal pipeline
     pub blast_requested: Arc<tokio::sync::mpsc::Sender<BlastRequest>>,
-    pub stop_flag: Arc<tokio_util::sync::CancellationToken>,
+    /// current campaign cancel token; overwritten at each campaign start
+    pub stop_flag: Arc<tokio::sync::Mutex<tokio_util::sync::CancellationToken>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -98,8 +99,37 @@ struct StatusData {
 }
 
 async fn stop(State(state): State<AppState>) -> (StatusCode, Json<ApiResponse<String>>) {
-    state.stop_flag.cancel();
+    state.stop_flag.lock().await.cancel();
     ok("stop requested".into())
+}
+
+#[derive(Serialize)]
+struct AccountInfo {
+    name: String,
+    port: u16,
+}
+
+/// live session registry — pipeline pushes/removes, this just reads
+static LIVE_SESSIONS: std::sync::OnceLock<
+    Arc<tokio::sync::Mutex<Vec<(String, u16)>>>,
+> = std::sync::OnceLock::new();
+
+pub fn sessions_registry() -> Arc<tokio::sync::Mutex<Vec<(String, u16)>>> {
+    LIVE_SESSIONS
+        .get_or_init(|| Arc::new(tokio::sync::Mutex::new(Vec::new())))
+        .clone()
+}
+
+async fn accounts(
+    State(_state): State<AppState>,
+) -> (StatusCode, Json<ApiResponse<Vec<AccountInfo>>>) {
+    let reg = sessions_registry();
+    let list = reg.lock().await;
+    let data = list
+        .iter()
+        .map(|(name, port)| AccountInfo { name: name.clone(), port: *port })
+        .collect();
+    ok(data)
 }
 
 /// bind loopback ONLY — never 0.0.0.0. enforced here in code, not config.
@@ -107,6 +137,7 @@ pub async fn serve(port: u16, state: AppState) -> Result<()> {
     let app = Router::new()
         .route("/api/blast", post(blast))
         .route("/api/status", get(status))
+        .route("/api/accounts", get(accounts))
         .route("/api/stop", post(stop))
         .with_state(state);
 

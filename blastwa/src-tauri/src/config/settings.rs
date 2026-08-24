@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub chrome_path: String,
     pub chrome_version: String,

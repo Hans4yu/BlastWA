@@ -1,6 +1,6 @@
 // JsInjector: drives whatsapp web via CDP evaluate.
-// templates are verbatim from the original binary's string heap, adapted to
-// return values through CDP instead of window.chrome.webview.postMessage.
+// bootstrap: login detection via localStorage (no deps), then WPP.js injection
+// (from local disk cache or CDN) before any WPP/WAPI call.
 use anyhow::{Context, Result};
 use chromiumoxide::Page;
 use serde::Deserialize;
@@ -8,8 +8,12 @@ use serde_json::Value;
 
 use crate::message::variables::js_escape;
 
+const WPP_CDN: &str = "https://unpkg.com/@wppconnect/wa-js/dist/wppconnect-wa.js";
+const WPP_INJECT_TIMEOUT_SECS: u64 = 30;
+
 pub struct JsInjector<'a> {
     pub page: &'a Page,
+    wpp_injected: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,40 +32,12 @@ impl SendResult {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct NumberStatus {
-    #[serde(rename = "numtoCheck", default)]
-    pub number: String,
-    #[serde(default)]
-    pub can_receive_message: Option<bool>,
-    #[serde(default, rename = "isBusiness")]
-    pub is_business: Option<bool>,
-    #[serde(default)]
-    pub status: Option<String>,
-    #[serde(default)]
-    pub error: Option<String>,
-}
-
-impl NumberStatus {
-    pub fn exists(&self) -> bool {
-        self.can_receive_message.unwrap_or(false)
-            || matches!(self.status.as_deref(), Some("Business") | Some("Regular"))
-    }
-
-    pub fn kind(&self) -> &'static str {
-        if self.is_business.unwrap_or(false) {
-            "Business"
-        } else if self.exists() {
-            "Regular"
-        } else {
-            "Not Found"
-        }
-    }
-}
-
 impl<'a> JsInjector<'a> {
     pub fn new(page: &'a Page) -> Self {
-        Self { page }
+        Self {
+            page,
+            wpp_injected: false,
+        }
     }
 
     async fn eval_json(&self, script: &str) -> Result<Value> {
@@ -74,53 +50,162 @@ impl<'a> JsInjector<'a> {
         Ok(v)
     }
 
+    // ---------- login detection (no library needed) ----------
+
+    /// login detection: modern wa web keeps session in IndexedDB (not
+    /// localStorage), so we check for the chat list DOM instead.
     pub async fn is_logged_in(&self) -> Result<bool> {
         let v = self
             .eval_json(
-                r#"(function(){ try { var m = WPP.conn.getMyUserId(); return m ? m.user : ""; } catch(e) { return ""; } })()"#,
+                r#"(function(){
+                    try {
+                        var chatList = !!document.querySelector(
+                            '#pane-side, [data-testid="chat-list"], [aria-label="Chat list"], [data-tab]'
+                        );
+                        var legacyWid = null;
+                        try { legacyWid = window.localStorage.getItem('last-wid'); } catch(e) {}
+                        return chatList || !!legacyWid;
+                    } catch(e) { return false; }
+                })()"#,
             )
             .await?;
-        Ok(v.as_str().map(|s| !s.is_empty()).unwrap_or(false))
+        Ok(v.as_bool().unwrap_or(false))
     }
 
     pub async fn my_user_id(&self) -> Result<String> {
-        let v = self.eval_json("WPP.conn.getMyUserId().user").await?;
+        let v = self
+            .eval_json(
+                r#"(function(){
+                    try {
+                        var w = window.localStorage.getItem('last-wid') || '';
+                        return w.split('@')[0].split(':')[0];
+                    } catch(e) { return ''; }
+                })()"#,
+            )
+            .await?;
         Ok(v.as_str().unwrap_or("").to_string())
     }
 
-    /// text message; is_safe verifies the chat exists before sending.
+    // ---------- WPP bootstrap ----------
+
+    /// inject WPP.js (wa-js) into the page and wait until ready.
+    /// web.whatsapp.com has strict CSP that blocks <script src> injection,
+    /// so we fetch the bundle in Rust and execute it via Runtime.evaluate
+    /// (same mechanism as devtools console — CSP does not apply).
+    pub async fn ensure_wpp(&mut self, local_wpp_js: Option<&str>) -> Result<()> {
+        if self.wpp_injected {
+            return Ok(());
+        }
+
+        // already loaded from a previous injection?
+        let already = self
+            .eval_json(
+                r#"(function(){ try { return !!(window.WPP && window.WPP.isReady); } catch(e){ return false; } })()"#,
+            )
+            .await?
+            .as_bool()
+            .unwrap_or(false);
+        if already {
+            let _ = self
+                .eval_json(
+                    r#"(async function(){ try { await window.WPP.init(); } catch(e){} return true; })()"#,
+                )
+                .await;
+            self.wpp_injected = true;
+            log::info!("WPP.js already present and ready");
+            return Ok(());
+        }
+
+        // source: disk cache first, then CDN fetch in rust (bypasses page CSP)
+        let source: String = match local_wpp_js {
+            Some(code) if code.len() > 1000 => code.to_string(),
+            _ => {
+                log::info!("fetching WPP.js from CDN ({WPP_CDN})");
+                let resp = reqwest::Client::new()
+                    .get(WPP_CDN)
+                    .header("User-Agent", "BlastWA/0.1")
+                    .send()
+                    .await
+                    .context("downloading WPP.js")?
+                    .error_for_status()
+                    .context("WPP.js download http error")?;
+                resp.text().await.context("reading WPP.js body")?
+            }
+        };
+        log::info!("executing WPP.js bundle ({} kb) via CDP evaluate", source.len() / 1024);
+
+        // execute the bundle directly in page main world via CDP.
+        // wrap in IIFE so top-level returns in the bundle don't clash.
+        let exec = format!("(function(){{\n{}\n}})()", source);
+        self.page
+            .evaluate(exec)
+            .await
+            .context("executing WPP.js bundle via cdp")?;
+
+        // poll until WPP.isReady
+        let deadline = tokio::time::Instant::now()
+            + std::time::Duration::from_secs(WPP_INJECT_TIMEOUT_SECS);
+        loop {
+            let ready = self
+                .eval_json(
+                    r#"(function(){ try { return !!(window.WPP && window.WPP.isReady); } catch(e){ return false; } })()"#,
+                )
+                .await?
+                .as_bool()
+                .unwrap_or(false);
+            if ready {
+                let _ = self
+                    .eval_json(
+                        r#"(async function(){ try { await window.WPP.init(); } catch(e){} return true; })()"#,
+                    )
+                    .await;
+                self.wpp_injected = true;
+                log::info!("WPP.js injected and ready");
+                return Ok(());
+            }
+            if tokio::time::Instant::now() >= deadline {
+                anyhow::bail!("WPP.js did not become ready within {WPP_INJECT_TIMEOUT_SECS}s");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    }
+
+    // ---------- messaging (WPP first, WAPI fallback) ----------
+
     pub async fn send_message(
         &self,
         wa_id: &str,
         message: &str,
         is_safe: bool,
     ) -> Result<SendResult> {
-        let id_esc = js_escape(wa_id);
-        let msg_esc = js_escape(message);
-        // promise-aware wrapper: await inside an async IIFE so CDP resolves it
+        let id = js_escape(wa_id);
+        let msg = js_escape(message);
         let script = format!(
             r#"(async () => {{
                 try {{
                     if ({is_safe}) {{
-                        var chatId = null;
-                        try {{ chatId = await WAPI.getchatId('{id}'); }} catch(e) {{}}
-                        if (!chatId) return {{ sentStatus: false, error: "chat not found" }};
+                        var exists = await WPP.number.queryExists('{id}');
+                        if (!exists || !exists.exists) return {{ sentStatus: false, error: "chat not found" }};
                     }}
-                    var r = await WAPI.sendMessage('{id}', '{msg}');
-                    return {{ sentStatus: !(r && r.erro), result: r || null }};
-                }} catch (ex) {{
-                    return {{ sentStatus: false, error: String(ex) }};
+                    var r = await WPP.chat.sendTextMessage('{id}', '{msg}');
+                    return {{ sentStatus: true, result: r || null }};
+                }} catch (e1) {{
+                    try {{
+                        var r2 = await WAPI.sendMessage('{id}', '{msg}');
+                        return {{ sentStatus: !(r2 && r2.erro) }};
+                    }} catch (e2) {{
+                        return {{ sentStatus: false, error: String(e1) }};
+                    }}
                 }}
             }})()"#,
-            id = id_esc,
-            msg = msg_esc,
+            id = id,
+            msg = msg,
             is_safe = is_safe,
         );
         let v = self.eval_json(&script).await?;
         Ok(serde_json::from_value(v)?)
     }
 
-    /// file (image/video/document) via WPP with base64 data uri
     pub async fn send_file(
         &self,
         wa_id: &str,
@@ -129,11 +214,10 @@ impl<'a> JsInjector<'a> {
         caption: &str,
         is_safe: bool,
     ) -> Result<SendResult> {
-        let id_esc = js_escape(wa_id);
-        let fn_esc = js_escape(filename);
-        let cap_esc = js_escape(caption);
-        // data uri goes in as a JS string literal too — escape it
-        let b64_esc = js_escape(data_uri);
+        let id = js_escape(wa_id);
+        let b64 = js_escape(data_uri);
+        let fname = js_escape(filename);
+        let cap = js_escape(caption);
         let script = format!(
             r#"(async () => {{
                 function getFileType(n) {{
@@ -146,9 +230,8 @@ impl<'a> JsInjector<'a> {
                 }}
                 try {{
                     if ({is_safe}) {{
-                        var chatId = null;
-                        try {{ chatId = await WAPI.getchatId('{id}'); }} catch(e) {{}}
-                        if (!chatId) return {{ sentStatus: false, error: "chat not found" }};
+                        var exists = await WPP.number.queryExists('{id}');
+                        if (!exists || !exists.exists) return {{ sentStatus: false, error: "chat not found" }};
                     }}
                     await WPP.chat.sendFileMessage('{id}', '{b64}', {{
                         type: getFileType('{fn}'),
@@ -160,46 +243,50 @@ impl<'a> JsInjector<'a> {
                     return {{ sentStatus: false, error: String(ex) }};
                 }}
             }})()"#,
-            id = id_esc,
-            b64 = b64_esc,
-            cap = cap_esc,
-            fn = fn_esc,
+            id = id,
+            b64 = b64,
+            cap = cap,
+            fn = fname,
             is_safe = is_safe,
         );
         let v = self.eval_json(&script).await?;
         Ok(serde_json::from_value(v)?)
     }
 
-    /// push-to-talk voice note
     pub async fn send_ptt(&self, wa_id: &str, data_uri: &str) -> Result<SendResult> {
-        let id_esc = js_escape(wa_id);
-        let b64_esc = js_escape(data_uri);
+        let id = js_escape(wa_id);
+        let b64 = js_escape(data_uri);
         let script = format!(
             r#"(async () => {{
                 try {{
-                    var chatId = await WAPI.getchatId('{id}');
-                    if (!chatId) return {{ sentStatus: false, error: "chat not found" }};
-                    await WPP.chat.sendFileMessage(chatId, '{b64}', {{ type: 'ptt', isPtt: true }});
+                    await WPP.chat.sendFileMessage('{id}', '{b64}', {{ type: 'audio', isPtt: true }});
                     return {{ sentStatus: true }};
                 }} catch (ex) {{
                     return {{ sentStatus: false, error: String(ex) }};
                 }}
             }})()"#,
-            id = id_esc,
-            b64 = b64_esc,
+            id = id,
+            b64 = b64,
         );
         let v = self.eval_json(&script).await?;
         Ok(serde_json::from_value(v)?)
     }
+
+    // ---------- number checking ----------
 
     pub async fn check_number(&self, number: &str) -> Result<NumberStatus> {
         let clean = number.replace('+', "");
         let script = format!(
             r#"(async () => {{
                 try {{
-                    var e = await WAPI.checkNumberStatus('{n}@c.us');
-                    e.numtoCheck = '{n}';
-                    return e;
+                    var r = await WPP.number.queryExists('{n}@c.us');
+                    return {{
+                        numtoCheck: '{n}',
+                        exists: !!(r && r.exists),
+                        canReceiveMessage: !!(r && r.exists),
+                        isBusiness: !!(r && r.business),
+                        wid: r ? String(r.wid || '') : ''
+                    }};
                 }} catch (ex) {{
                     return {{ numtoCheck: '{n}', error: String(ex) }};
                 }}
@@ -210,10 +297,17 @@ impl<'a> JsInjector<'a> {
         Ok(serde_json::from_value(v)?)
     }
 
+    // ---------- groups ----------
+
     pub async fn get_all_groups(&self) -> Result<Vec<(String, String)>> {
         let v = self
             .eval_json(
-                r#"(function(){ var t=[]; try { for(let c of WAPI.getAllGroups()){ t.push({id:c.id._serialized,name:c.name}); } } catch(e){} return t; })()"#,
+                r#"(async function(){
+                    try {
+                        var gs = await WPP.group.getAll();
+                        return gs.map(function(g){ return {{id: g.id._serialized || g.gid._serialized || '', name: g.name || g.subject || ''}}; });
+                    } catch(e) {{ return []; }}
+                }})()"#,
             )
             .await?;
         let mut out = Vec::new();
@@ -234,7 +328,7 @@ impl<'a> JsInjector<'a> {
             r#"(async () => {{
                 try {{
                     var p = await WPP.group.getParticipants('{gid}');
-                    return p.map(x => x.id ? x.id._serialized : String(x));
+                    return p.map(function(x){{ return (x.id && x.id._serialized) ? x.id._serialized : String(x); }});
                 }} catch (ex) {{ return []; }}
             }})()"#,
             gid = gid
@@ -251,10 +345,14 @@ impl<'a> JsInjector<'a> {
         Ok(out)
     }
 
-    /// presence helpers used by the human behavior engine (best-effort)
+    // ---------- presence (best effort) ----------
+
     pub async fn mark_seen(&self, wa_id: &str) -> Result<()> {
         let _ = self
-            .eval_json(&format!("try {{ WAPI.markSeen('{}'); }} catch(e) {{}} true", wa_id))
+            .eval_json(&format!(
+                r#"(async function(){{ try {{ await WPP.chat.markIsRead('{id}@c.us'); }} catch(e){{}} return true; }})()"#,
+                id = js_escape(wa_id)
+            ))
             .await;
         Ok(())
     }
@@ -262,18 +360,48 @@ impl<'a> JsInjector<'a> {
     pub async fn send_typing_state(&self, wa_id: &str) -> Result<()> {
         let _ = self
             .eval_json(&format!(
-                "try {{ WAPI.sendChatStateComposing('{}@c.us'); }} catch(e) {{}} true",
-                wa_id
+                r#"(async function(){{ try {{ await WPP.chat.markIsComposing('{id}@c.us'); }} catch(e){{}} return true; }})()"#,
+                id = js_escape(wa_id)
             ))
             .await;
         Ok(())
     }
 
     pub async fn poll_new_messages(&self) -> Result<Value> {
-        // snapshot of chats with unread messages for autoreply watcher
         self.eval_json(
             r#"(function(){ try { return WAPI.getAllChatsWithNewMsg(null) || []; } catch(e){ return []; } })()"#,
         )
         .await
+    }
+}
+
+// NumberStatus lives at module level (see below) — keep the impl near RawCheck
+#[derive(Debug, Deserialize)]
+pub struct NumberStatus {
+    #[serde(rename = "numtoCheck", default)]
+    pub number: String,
+    #[serde(default)]
+    pub exists: Option<bool>,
+    #[serde(rename = "canReceiveMessage", default)]
+    pub can_receive_message: Option<bool>,
+    #[serde(rename = "isBusiness", default)]
+    pub is_business: Option<bool>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+impl NumberStatus {
+    pub fn exists(&self) -> bool {
+        self.exists.unwrap_or(false) || self.can_receive_message.unwrap_or(false)
+    }
+
+    pub fn kind(&self) -> &'static str {
+        if self.is_business.unwrap_or(false) {
+            "Business"
+        } else if self.exists() {
+            "Regular"
+        } else {
+            "Not Found"
+        }
     }
 }
