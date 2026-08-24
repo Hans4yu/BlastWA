@@ -2,6 +2,7 @@
 // all frontend commands land here; pipeline + api server run in background.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
@@ -30,6 +31,8 @@ struct AppCtx {
     contacts: Mutex<ContactList>,
     logs: Arc<Mutex<Vec<LogEntry>>>,
     templates: TemplateLibrary,
+    /// short-lived wa-auth probe cache: name -> (probed_at, authenticated, number)
+    auth_cache: Arc<Mutex<HashMap<String, (std::time::Instant, bool, Option<String>)>>>,
 }
 
 // ---------- accounts ----------
@@ -98,30 +101,89 @@ async fn register_live_session(name: &str, port: u16) {
 
 #[tauri::command]
 async fn list_accounts(ctx: State<'_, AppCtx>) -> Result<Vec<serde_json::Value>, String> {
-    // identities come from disk; port/connected come from the live registry.
-    // an account restored from storage shows connected: false until
-    // Open Browser (or Add Account) brings its session back.
+    // identities come from disk; live state is probed per account:
+    //   browser_running  = chrome/cdp session alive (page handle + evaluate ok)
+    //   wa_authenticated = whatsapp web auth confirmed via DOM (JsInjector)
+    //   connected        = browser_running && wa_authenticated
+    //   number           = whatsapp identity, only when authenticated
     let app_dir = AppConfig::app_dir();
     let saved = server::load_saved_accounts(&app_dir);
     let reg = server::sessions_registry();
     let live = reg.lock().await;
 
-    let mut out = Vec::new();
-    for name in &saved {
-        let session = live.iter().find(|(n, _): &&(String, u16)| n == name);
-        out.push(serde_json::json!({
-            "name": name,
-            "port": session.map(|(_, p)| p),
-            "connected": session.is_some(),
-        }));
-    }
-    // live-only sessions (e.g. launched via rest pipeline) still show up
-    for (n, p) in live.iter() {
-        if !saved.contains(n) {
-            out.push(serde_json::json!({ "name": n, "port": p, "connected": true }));
+    let mut names: Vec<String> = saved.clone();
+    for (n, _) in live.iter() {
+        if !names.contains(n) {
+            names.push(n.clone());
         }
     }
+    drop(live);
+
+    let mut out = Vec::new();
+    for name in &names {
+        let (browser_running, wa_auth, number) = probe_account_state(&ctx, name).await;
+        let port = live_session_port(name).await;
+        let connected = browser_running && wa_auth;
+        out.push(serde_json::json!({
+            "name": name,
+            "port": if browser_running { port } else { None },
+            "browser_running": browser_running,
+            "wa_authenticated": wa_auth,
+            "connected": connected,
+            "number": number,
+        }));
+    }
     Ok(out)
+}
+
+/// probe one account's live page for whatsapp auth state.
+/// results are cached briefly so dashboard + status bar polling do not
+/// re-evaluate the same page back to back.
+async fn probe_account_state(
+    ctx: &AppCtx,
+    name: &str,
+) -> (bool, bool, Option<String>) {
+    const TTL: std::time::Duration = std::time::Duration::from_millis(2000);
+
+    {
+        let cache = ctx.auth_cache.lock().unwrap();
+        if let Some((at, auth, number)) = cache.get(name) {
+            if at.elapsed() < TTL {
+                return (true, *auth, number.clone());
+            }
+        }
+    }
+
+    let Some(page) = ctx.pipeline.page_handle(name).await else {
+        return (false, false, None); // no live session: browser not running
+    };
+
+    let injector = blastwa_core::browser::js_injector::JsInjector::new(&page);
+    match injector.is_logged_in().await {
+        Ok(auth) => {
+            let number = if auth {
+                injector
+                    .my_user_id()
+                    .await
+                    .ok()
+                    .filter(|s| !s.is_empty())
+            } else {
+                None
+            };
+            let mut cache = ctx.auth_cache.lock().unwrap();
+            cache.insert(
+                name.to_string(),
+                (std::time::Instant::now(), auth, number.clone()),
+            );
+            (true, auth, number)
+        }
+        Err(_) => {
+            // evaluate failed: page or cdp is gone
+            let mut cache = ctx.auth_cache.lock().unwrap();
+            cache.remove(name);
+            (false, false, None)
+        }
+    }
 }
 
 #[tauri::command]
@@ -606,6 +668,7 @@ fn main() {
         contacts: Mutex::new(ContactList::default()),
         logs: Arc::new(Mutex::new(Vec::new())),
         templates,
+        auth_cache: Arc::new(Mutex::new(HashMap::new())),
     };
 
     tauri::Builder::default()

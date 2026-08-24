@@ -406,3 +406,5 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
   white-space: pre;
   margin: 0;
 }
+
+.badge-gray { background: #eceff1; color: #607d8b; border: 1px solid #cfd8dc; }

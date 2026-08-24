@@ -60,14 +60,21 @@
       $('accounts-total').textContent = accounts.length;
       $('accounts-empty').style.display = accounts.length ? 'none' : '';
 
-      $('accounts-body').innerHTML = accounts.length ? accounts.map((a, i) => `
+      $('accounts-body').innerHTML = accounts.length ? accounts.map((a, i) => {
+        // explicit semantics: connected requires whatsapp auth, not just a
+        // live chrome session
+        const badge = a.connected
+          ? '<span class="badge badge-green">Connected</span>'
+          : a.browser_running
+            ? '<span class="badge badge-yellow">Waiting for scan</span>'
+            : '<span class="badge badge-gray">Saved</span>';
+        return `
         <tr>
           <td>${i + 1}</td>
           <td><b>${esc(a.name)}</b></td>
-          <td><span class="badge ${a.connected ? 'badge-green' : 'badge-yellow'}">
-            ${a.connected ? 'Connected' : 'Saved'}</span></td>
+          <td>${badge}</td>
           <td class="mono">${a.port != null ? esc(a.port) : '-'}</td>
-          <td class="mono">${esc(a.number || 'not scanned')}</td>
+          <td class="mono">${a.number ? esc(a.number) : 'not scanned'}</td>
           <td>
             <button class="btn btn-sm btn-secondary"
               onclick="openAccountBrowser('${esc(a.name)}')">
@@ -78,7 +85,8 @@
               Remove
             </button>
           </td>
-        </tr>`).join('')
+        </tr>`;
+      }).join('')
         : `<tr><td colspan="6"><div class="empty-state">No accounts yet. Click "+ Add Account" to scan a QR code.</div></td></tr>`;
     } catch (e) {
       $('accounts-empty').style.display = '';

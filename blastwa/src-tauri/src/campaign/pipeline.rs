@@ -147,6 +147,13 @@ impl Pipeline {
         v.into_value::<String>().ok()
     }
 
+    /// non-launching page accessor for status probes.
+    /// returns None when no live session exists for the account.
+    pub async fn page_handle(&self, name: &str) -> Option<chromiumoxide::Page> {
+        let pages = self.pages.lock().await;
+        pages.get(name).cloned()
+    }
+
     /// public entry for gui commands: session + wpp bootstrap in one call
     pub async fn get_injector(&self, account: &str) -> Result<crate::browser::js_injector::JsInjector> {
         let page = self.get_page(account).await?;

@@ -73,9 +73,17 @@ impl JsInjector {
     }
 
     pub async fn my_user_id(&self) -> Result<String> {
+        // prefer the WPP identity (reliable once wa-js is injected);
+        // fall back to the legacy localStorage key on older wa web builds
         let v = self
             .eval_json(
                 r#"(function(){
+                    try {
+                        if (window.WPP && window.WPP.isReady) {
+                            var u = WPP.conn.getMyUserId();
+                            if (u && u.user) return String(u.user);
+                        }
+                    } catch(e) {}
                     try {
                         var w = window.localStorage.getItem('last-wid') || '';
                         return w.split('@')[0].split(':')[0];

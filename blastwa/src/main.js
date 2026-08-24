@@ -9,9 +9,39 @@
 // repeated navigation cannot accumulate duplicates.
 
 const isTauri = !!window.__TAURI__;
-export const invoke = window.__TAURI__
+// tauri's webview user agent contains "Tauri" even when the global bridge
+// is missing, which lets us tell a broken desktop build apart from a
+// deliberate browser-dev session.
+const uaIsTauri = /tauri/i.test(navigator.userAgent || '');
+
+if (!isTauri && uaIsTauri) {
+  // desktop build without the bridge = broken install. never mock silently.
+  console.error(
+    '[BlastWA] FATAL: running inside the Tauri desktop shell but window.__TAURI__ is missing. ' +
+    'IPC is unavailable. Check that app.withGlobalTauri is enabled in tauri.conf.json.'
+  );
+} else if (!isTauri) {
+  console.warn(
+    '[BlastWA EXPLICIT MOCK MODE] no Tauri runtime detected (plain browser dev). ' +
+    'All invoke() calls return labeled mocks and never reach Rust.'
+  );
+}
+
+export const invoke = isTauri
   ? window.__TAURI__.core.invoke
-  : async (cmd, args = {}) => ({ mock: true, cmd, args });
+  : uaIsTauri
+    ? // desktop build, bridge missing: fail loudly instead of mock success
+      async (cmd) => {
+        throw new Error(
+          `Tauri IPC bridge unavailable in desktop build (window.__TAURI__ missing). ` +
+          `invoke('${cmd}') cannot reach Rust. Verify app.withGlobalTauri in tauri.conf.json.`
+        );
+      }
+    : // plain browser dev: explicitly labeled mock, announced at startup
+      async (cmd, args = {}) => {
+        console.warn(`[BlastWA MOCK] invoke('${cmd}') mocked (browser dev mode, not real IPC)`);
+        return { mock: true, mockLabeled: true, cmd, args };
+      };
 
 // ----- page-scoped listener lifecycle -----
 
@@ -160,21 +190,29 @@ async function refreshStatus() {
     const accounts = await invoke('list_accounts');
     const list = Array.isArray(accounts) ? accounts : [];
     const connected = list.find((a) => a.connected);
+    const waiting = list.find((a) => a.browser_running && !a.wa_authenticated);
     if (connected) {
       $('sb-dot').classList.remove('off');
       $('sb-conn').textContent = 'Connected';
       $('sb-account').textContent = `Account: ${connected.number || connected.name}`;
+    } else if (waiting) {
+      $('sb-dot').classList.add('off');
+      $('sb-conn').textContent = 'Waiting for scan';
+      $('sb-account').textContent = `Account: ${waiting.name}`;
     } else {
       $('sb-dot').classList.add('off');
       $('sb-conn').textContent = 'Not connected';
       $('sb-account').textContent = 'Account: -';
     }
     const st = await invoke('get_status');
-    if (st && !st.mock) {
-      $('sb-login').textContent = st.running ? 'Sending...' : 'Logged In';
-    } else {
-      $('sb-login').textContent = 'Logged In';
-    }
+    const campaignRunning = st && !st.mock && st.running;
+    $('sb-login').textContent = campaignRunning
+      ? 'Sending...'
+      : connected
+        ? 'Logged In'
+        : waiting
+          ? 'Waiting for scan'
+          : 'Logged Out';
   } catch (e) {
     // keep last known state on transient errors
   }
