@@ -11,8 +11,8 @@ use crate::message::variables::js_escape;
 const WPP_CDN: &str = "https://unpkg.com/@wppconnect/wa-js/dist/wppconnect-wa.js";
 const WPP_INJECT_TIMEOUT_SECS: u64 = 30;
 
-pub struct JsInjector<'a> {
-    pub page: &'a Page,
+pub struct JsInjector {
+    pub page: Page,
     wpp_injected: bool,
 }
 
@@ -32,10 +32,10 @@ impl SendResult {
     }
 }
 
-impl<'a> JsInjector<'a> {
-    pub fn new(page: &'a Page) -> Self {
+impl JsInjector {
+    pub fn new(page: &Page) -> Self {
         Self {
-            page,
+            page: page.clone(),
             wpp_injected: false,
         }
     }

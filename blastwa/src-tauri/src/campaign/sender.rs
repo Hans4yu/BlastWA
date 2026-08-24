@@ -62,7 +62,7 @@ pub struct CampaignStats {
 }
 
 pub async fn run_campaign(
-    injector: JsInjector<'_>,
+    injector: JsInjector,
     contacts: &ContactList,
     message_template: &str,
     attachment: Option<&(Vec<u8>, String)>, // (bytes, filename)

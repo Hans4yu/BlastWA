@@ -9,7 +9,7 @@ pub struct WaGroup {
     pub name: String,
 }
 
-pub async fn list_groups(injector: &JsInjector<'_>) -> anyhow::Result<Vec<WaGroup>> {
+pub async fn list_groups(injector: &JsInjector) -> anyhow::Result<Vec<WaGroup>> {
     let raw = injector.get_all_groups().await?;
     Ok(raw.into_iter().map(|(id, name)| WaGroup { id, name }).collect())
 }
@@ -17,7 +17,7 @@ pub async fn list_groups(injector: &JsInjector<'_>) -> anyhow::Result<Vec<WaGrou
 /// pull participants of one group as ContactRows ready for campaigns.
 /// wa ids look like 628123...@c.us — strip the suffix back to bare digits.
 pub async fn grab_participants(
-    injector: &JsInjector<'_>,
+    injector: &JsInjector,
     group_id: &str,
 ) -> anyhow::Result<Vec<ContactRow>> {
     let ids = injector.get_group_participants(group_id).await?;

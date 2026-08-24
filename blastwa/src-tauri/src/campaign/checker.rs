@@ -16,7 +16,7 @@ pub struct CheckOutcome {
 /// check a batch of numbers with polite pacing between requests.
 /// on_progress fires per checked number so the UI can stream results.
 pub async fn check_numbers(
-    injector: &JsInjector<'_>,
+    injector: &JsInjector,
     numbers: &[String],
     on_progress: impl Fn(usize, usize, &CheckOutcome),
 ) -> Result<Vec<CheckOutcome>> {

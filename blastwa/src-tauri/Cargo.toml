@@ -32,6 +32,9 @@ winreg = "0.52"
 # tauri v2 wired behind gui feature; core stays testable headless
 tauri = { version = "2", optional = true }
 
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
 [features]
 gui = ["dep:tauri"]
 

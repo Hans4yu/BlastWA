@@ -44,7 +44,7 @@ impl Pipeline {
         }
     }
 
-    async fn get_page(&self, account: &str) -> Result<chromiumoxide::Page> {
+    pub async fn get_page(&self, account: &str) -> Result<chromiumoxide::Page> {
         let mut pages = self.pages.lock().await;
 
         // reuse a live session when we have one
@@ -145,6 +145,12 @@ impl Pipeline {
             .await
             .ok()?;
         v.into_value::<String>().ok()
+    }
+
+    /// public entry for gui commands: session + wpp bootstrap in one call
+    pub async fn get_injector(&self, account: &str) -> Result<crate::browser::js_injector::JsInjector> {
+        let page = self.get_page(account).await?;
+        Ok(crate::browser::js_injector::JsInjector::new(&page))
     }
 
     async fn execute(&self, req: BlastRequest) -> Result<()> {
