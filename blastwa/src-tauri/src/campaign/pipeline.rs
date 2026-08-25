@@ -276,8 +276,11 @@ impl Pipeline {
         if let Some(page) = wa_page {
             // heal duplicates from earlier races: keep the first wa tab,
             // close the rest
-            for dup in wa_tabs.iter().skip(1) {
-                let _ = dup.clone().close().await;
+            if wa_tabs.len() > 1 {
+                log::info!("attach {account}: closing {} duplicate wa tabs", wa_tabs.len() - 1);
+                for dup in wa_tabs.iter().skip(1) {
+                    let _ = dup.clone().close().await;
+                }
             }
             pages.insert(account.to_string(), page.clone());
             return Ok(page);

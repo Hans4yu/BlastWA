@@ -161,8 +161,26 @@ async fn probe_account_state(
         }
     }
 
-    let Some(page) = ctx.pipeline.page_handle(name).await else {
-        return (false, false, None); // no live session: browser not running
+    let page = match ctx.pipeline.page_handle(name).await {
+        Some(p) => p,
+        None => {
+            // no handle this run (app restarted, or a failed probe evicted
+            // it) — but the registry may still point at a living chrome.
+            // attach on demand instead of reporting saved forever.
+            let Some(port) = live_session_port(name).await else {
+                return (false, false, None);
+            };
+            if !session_alive(port).await {
+                return (false, false, None);
+            }
+            match ctx.pipeline.attach(name, port).await {
+                Ok(p) => p,
+                Err(e) => {
+                    log::warn!("probe attach for {name} failed: {e:#}");
+                    return (false, false, None);
+                }
+            }
+        }
     };
 
     let injector = blastwa_core::browser::js_injector::JsInjector::new(&page);
@@ -190,9 +208,12 @@ async fn probe_account_state(
                     let pipeline = ctx.pipeline.clone();
                     let account = name.to_string();
                     let page = page.clone();
+                    let boot_flag = ctx.wpp_bootstrapped.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = pipeline.ensure_wpp_for(&account, page).await {
                             log::warn!("wpp bootstrap for number identity failed: {e:#}");
+                            // allow a retry on the next poll
+                            boot_flag.lock().unwrap().remove(&account);
                         }
                     });
                 }
