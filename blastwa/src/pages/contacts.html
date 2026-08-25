@@ -20,6 +20,8 @@
         <button class="btn" onclick="pickAndImport()">Import .txt / .csv / .xlsx</button>
         <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
           style="display:none" onchange="handleImport(this)" />
+        <button class="btn btn-sm" id="btn-import-wa">Import from WhatsApp phonebook</button>
+        <select id="wa-account" style="width:150px"><option value="">Default</option></select>
         <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
       </div>
       <span style="font-size:11px;color:var(--text-dim)">
@@ -133,11 +135,30 @@
       const accounts = await invoke('list_accounts');
       const list = Array.isArray(accounts) ? accounts : [];
       if (list.length) {
-        document.getElementById('check-account').innerHTML = list
-          .map((a) => `<option value="${a.name}">${a.name}</option>`)
-          .join('');
+        const opts = list.map((a) => `<option value="${a.name}">${a.name}</option>`).join('');
+        document.getElementById('check-account').innerHTML = opts;
+        document.getElementById('wa-account').innerHTML =
+          '<option value="">Default</option>' + opts;
       }
     } catch (e) {}
+
+    // U14: pull the account's whatsapp phonebook into the send list
+    document.getElementById('btn-import-wa').addEventListener('click', async () => {
+      const acct = document.getElementById('wa-account').value;
+      const btn = document.getElementById('btn-import-wa');
+      btn.disabled = true;
+      btn.textContent = 'Importing...';
+      try {
+        const r = await invoke('import_wa_contacts', { account: acct });
+        alert('Added ' + ((r && r.added) ?? 0) + ' contacts from the whatsapp phonebook.');
+        await refresh();
+      } catch (e) {
+        alert('Phonebook import failed: ' + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Import from WhatsApp phonebook';
+      }
+    });
 
     let validNumbers = [];
     const unlistenCheck = await listen('check_progress', (ev) => {

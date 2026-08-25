@@ -352,6 +352,9 @@ async fn start_campaign(
     caption: Option<String>,
     schedule_at: Option<String>,
     is_blind_mode: Option<bool>,
+    accounts: Option<Vec<String>>,
+    list_message: Option<serde_json::Value>,
+    catalog_product_id: Option<String>,
     ctx: State<'_, AppCtx>,
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
@@ -393,7 +396,7 @@ async fn start_campaign(
         delay_max_s: delay_max_s.unwrap_or(cfg.default_delay_max as f64),
         ..HumanBehaviorConfig::default()
     };
-    let camp_cfg = CampaignConfig {
+    let mut camp_cfg = CampaignConfig {
         account_name: account.clone(),
         delay_min_s: human.delay_min_s,
         delay_max_s: human.delay_max_s,
@@ -402,6 +405,14 @@ async fn start_campaign(
         schedule_at: scheduled,
         ..Default::default()
     };
+    // U15: interactive list composition
+    if let Some(spec) = list_message.filter(|v| !v.is_null()) {
+        let parsed: blastwa_core::campaign::sender::ListMessageSpec =
+            serde_json::from_value(spec).map_err(|e| format!("invalid list message config: {e}"))?;
+        camp_cfg.list_message = Some(parsed);
+    }
+    // U16: catalog product card
+    camp_cfg.catalog_product_id = catalog_product_id.filter(|s| !s.is_empty());
 
     // rotation: the composed body splits into variants on --- separator lines
     let message_variants = split_message_variants(&message);
@@ -420,12 +431,42 @@ async fn start_campaign(
         None => None,
     };
 
-    // get or launch the account session (qr wait handled inside)
-    let injector = ctx
-        .pipeline
-        .get_injector(&account)
-        .await
-        .map_err(|e| e.to_string())?;
+    // multi-channel (U17): several accounts fan out one campaign without
+    // duplicates. per OKESENDER parity, multi-account always runs blind.
+    let mut account_names = accounts.unwrap_or_default();
+    if !account.is_empty() && !account_names.iter().any(|a| a == &account) {
+        account_names.insert(0, account.clone());
+    }
+    account_names.retain(|a| !a.is_empty());
+    if account_names.is_empty() {
+        return Err("account is required".into());
+    }
+    let multi = account_names.len() > 1;
+    if multi {
+        if !camp_cfg.is_blind_mode {
+            log::info!("multi-channel mode forces blind mode");
+        }
+        camp_cfg.is_blind_mode = true;
+    }
+
+    // round-robin split: no contact receives the message twice
+    let mut chunks: Vec<ContactList> =
+        (0..account_names.len()).map(|_| ContactList::default()).collect();
+    for (i, c) in contacts.contacts.iter().enumerate() {
+        let slot = i % chunks.len();
+        chunks[slot].contacts.push(c.clone());
+    }
+
+    // resolve every account session up front (qr waits happen sequentially)
+    let mut injectors = Vec::with_capacity(account_names.len());
+    for name in &account_names {
+        injectors.push(
+            ctx.pipeline
+                .get_injector(name)
+                .await
+                .map_err(|e| e.to_string())?,
+        );
+    }
 
     let state = ctx.state.clone();
     state.running.store(true, Ordering::Relaxed);
@@ -442,7 +483,12 @@ async fn start_campaign(
 
     let counters = state.clone();
     let logs = Arc::clone(&ctx.logs);
-    let campaign_name = format!("{} {}", account, chrono::Local::now().format("%d-%m %H:%M"));
+    let account_label = account_names.join("+");
+    let campaign_name = format!(
+        "{} {}",
+        account_label,
+        chrono::Local::now().format("%d-%m %H:%M")
+    );
     let queued = contacts.len();
 
     // campaign history: append the record now, finalize it when the loop
@@ -450,7 +496,7 @@ async fn start_campaign(
     let started_at = chrono::Local::now();
     let start_record = CampaignRecord {
         started_at,
-        account: account.clone(),
+        account: account_label.clone(),
         message_preview: message.chars().take(80).collect(),
         total: queued as u32,
         sent: 0,
@@ -460,40 +506,75 @@ async fn start_campaign(
     if let Err(e) = append_campaign_record(&AppConfig::app_dir(), &start_record) {
         log::warn!("failed to write campaign history: {e:#}");
     }
-    let account_for_history = account.clone();
     let token_for_status = token.clone();
 
     tauri::async_runtime::spawn(async move {
         let app_for_progress = app.clone();
-        let _ = run_campaign(
-            injector,
-            &contacts,
-            &message_variants,
-            attachment.as_ref(),
-            caption.as_deref().unwrap_or(""),
-            &camp_cfg,
-            token,
-            state.paused.clone(),
-            move |p: ProgressEvent| {
-                counters.sent.store(p.sent, Ordering::Relaxed);
-                counters.failed.store(p.failed, Ordering::Relaxed);
-                logs.lock().unwrap().push(LogEntry {
-                    timestamp: chrono::Local::now(),
-                    number: p.current_number.clone(),
-                    fullname: String::new(),
-                    status: p.status.clone(),
-                    error_reason: None,
-                    campaign_name: campaign_name.clone(),
-                });
-                // live progress: the sending page listens for this exact event
-                let _ = app_for_progress.emit("campaign_progress", &p);
-            },
-        )
-        .await;
+        let acc_sent = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let acc_failed = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let total_accounts = injectors.len();
+
+        for (i, inj) in injectors.into_iter().enumerate() {
+            if token_for_status.is_cancelled() {
+                break;
+            }
+            if total_accounts > 1 {
+                log::info!(
+                    "multi-channel: account {} of {} ({})",
+                    i + 1,
+                    total_accounts,
+                    account_names[i]
+                );
+            }
+            let mut per_account_cfg = camp_cfg.clone();
+            per_account_cfg.account_name = account_names[i].clone();
+            let base_sent = acc_sent.load(Ordering::Relaxed);
+            let base_failed = acc_failed.load(Ordering::Relaxed);
+            let closure_counters = counters.clone();
+            let logs = logs.clone();
+            let name = campaign_name.clone();
+            let progress_app = app_for_progress.clone();
+            let _ = run_campaign(
+                inj,
+                &chunks[i],
+                &message_variants,
+                attachment.as_ref(),
+                caption.as_deref().unwrap_or(""),
+                &per_account_cfg,
+                token_for_status.clone(),
+                state.paused.clone(),
+                move |p: ProgressEvent| {
+                    closure_counters.sent.store(base_sent + p.sent, Ordering::Relaxed);
+                    closure_counters.failed.store(base_failed + p.failed, Ordering::Relaxed);
+                    logs.lock().unwrap().push(LogEntry {
+                        timestamp: chrono::Local::now(),
+                        number: p.current_number.clone(),
+                        fullname: String::new(),
+                        status: p.status.clone(),
+                        error_reason: None,
+                        campaign_name: name.clone(),
+                    });
+                    // live progress: the sending page listens for this exact event
+                    let _ = progress_app.emit(
+                        "campaign_progress",
+                        &ProgressEvent {
+                            sent: base_sent + p.sent,
+                            failed: base_failed + p.failed,
+                            pending: p.pending,
+                            current_number: p.current_number,
+                            status: p.status,
+                        },
+                    );
+                },
+            )
+            .await;
+            acc_sent.store(counters.sent.load(Ordering::Relaxed), Ordering::Relaxed);
+            acc_failed.store(counters.failed.load(Ordering::Relaxed), Ordering::Relaxed);
+        }
         // finalize the history record with the real counters (U6)
         let finished = CampaignRecord {
             started_at,
-            account: account_for_history,
+            account: account_label,
             message_preview: start_record.message_preview,
             total: state.total.load(Ordering::Relaxed),
             sent: state.sent.load(Ordering::Relaxed),
@@ -812,6 +893,54 @@ fn add_generated_contacts(
         added += 1;
     }
     Ok(serde_json::json!({ "ok": true, "added": added }))
+}
+
+/// U14: pull contacts saved in a whatsapp account's phonebook into the list
+#[tauri::command]
+async fn import_wa_contacts(
+    account: String,
+    ctx: State<'_, AppCtx>,
+) -> Result<serde_json::Value, String> {
+    let injector = ctx
+        .pipeline
+        .get_injector_attached(&account)
+        .await
+        .map_err(|e| e.to_string())?;
+    let wa_contacts = injector.list_wa_contacts().await.map_err(|e| e.to_string())?;
+    let mut list = ctx.contacts.lock().unwrap();
+    let mut added = 0usize;
+    for (number, name) in wa_contacts {
+        if number.is_empty() || list.contacts.iter().any(|c| c.number == number) {
+            continue;
+        }
+        list.contacts
+            .push(blastwa_core::message::variables::ContactRow::from_fullname(&number, &name));
+        added += 1;
+    }
+    Ok(serde_json::json!({ "ok": true, "added": added }))
+}
+
+/// U16: products in an account's own whatsapp catalog
+#[tauri::command]
+async fn list_catalog_products(
+    account: String,
+    ctx: State<'_, AppCtx>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let injector = ctx
+        .pipeline
+        .get_injector_attached(&account)
+        .await
+        .map_err(|e| e.to_string())?;
+    let products = injector
+        .get_catalog_products()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(products
+        .into_iter()
+        .map(|(id, name, description)| {
+            serde_json::json!({ "id": id, "name": name, "description": description })
+        })
+        .collect())
 }
 
 // ---------- autoreply ----------
@@ -1133,6 +1262,7 @@ fn main() {
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
             keep_contacts_only, add_generated_contacts,
+            import_wa_contacts, list_catalog_products,
             load_rules, save_rules,
             list_templates, search_templates, save_template, delete_template,
             get_logs, export_log,

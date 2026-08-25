@@ -324,6 +324,144 @@ impl JsInjector {
 
     // ---------- groups ----------
 
+    /// U14: contacts saved in the account's whatsapp phonebook
+    pub async fn list_wa_contacts(&self) -> Result<Vec<(String, String)>> {
+        let v = self.eval_json(
+            r#"(async () => {
+                try {
+                    var cs = await WPP.contact.list({ onlyMyContacts: true });
+                    return (cs || []).map(function (c) {
+                        return {
+                            number: String((c.id && c.id.user) || ''),
+                            name: String(c.name || c.formattedName || c.pushname || '')
+                        };
+                    });
+                } catch (ex) { return { error: String(ex) }; }
+            })()"#,
+        ).await?;
+        if let Some(err) = v.get("error").and_then(|e| e.as_str()) {
+            anyhow::bail!("list contacts failed: {err}");
+        }
+        let items = v.as_array().cloned().unwrap_or_default();
+        Ok(items
+            .into_iter()
+            .filter_map(|c| {
+                let number = c.get("number")?.as_str()?.to_string();
+                let name = c
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if number.is_empty() {
+                    None
+                } else {
+                    Some((number, name))
+                }
+            })
+            .collect())
+    }
+
+    /// U15: interactive list message (buttons are gone from wa-js v4+;
+    /// list messages are the supported interactive primitive)
+    pub async fn send_list_message(
+        &self,
+        wa_id: &str,
+        title: &str,
+        description: &str,
+        button_text: &str,
+        footer: &str,
+        sections_json: &str,
+    ) -> Result<SendResult> {
+        let id = js_escape(wa_id);
+        let title = js_escape(title);
+        let desc = js_escape(description);
+        let btn = js_escape(button_text);
+        let footer = js_escape(footer);
+        let script = format!(
+            r#"(async () => {{
+                try {{
+                    await WPP.chat.sendListMessage('{id}', {{
+                        title: '{title}',
+                        description: '{desc}',
+                        buttonText: '{btn}',
+                        footer: '{footer}',
+                        sections: {sections}
+                    }});
+                    return {{ sentStatus: true }};
+                }} catch (ex) {{
+                    return {{ sentStatus: false, error: String(ex) }};
+                }}
+            }})()"#,
+            id = id,
+            title = title,
+            desc = desc,
+            btn = btn,
+            footer = footer,
+            sections = sections_json,
+        );
+        let v = self.eval_json(&script).await?;
+        Ok(serde_json::from_value(v)?)
+    }
+
+    /// U16: products in this account's own catalog
+    pub async fn get_catalog_products(&self) -> Result<Vec<(String, String, String)>> {
+        let v = self.eval_json(
+            r#"(async () => {
+                try {
+                    var raw = await WPP.catalog.getMyCatalog();
+                    var arr = Array.isArray(raw) ? raw : (raw && raw.data) ||
+                              (raw && raw.msgProductCollection && raw.msgProductCollection._models) || [];
+                    return (arr || []).map(function (p) {
+                        return {
+                            id: String(p.id || ''),
+                            name: String(p.name || ''),
+                            description: String(p.description || '')
+                        };
+                    });
+                } catch (ex) { return { error: String(ex) }; }
+            })()"#,
+        ).await?;
+        if let Some(err) = v.get("error").and_then(|e| e.as_str()) {
+            anyhow::bail!("catalog fetch failed: {err}");
+        }
+        let items = v.as_array().cloned().unwrap_or_default();
+        Ok(items
+            .into_iter()
+            .filter_map(|p| {
+                let id = p.get("id")?.as_str()?.to_string();
+                let name = p.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+                let description = p
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                Some((id, name, description))
+            })
+            .collect())
+    }
+
+    /// U16: catalog product card message
+    pub async fn send_catalog_message(&self, wa_id: &str, product_id: &str) -> Result<SendResult> {
+        let id = js_escape(wa_id);
+        let pid = js_escape(product_id);
+        let script = format!(
+            r#"(async () => {{
+                try {{
+                    await WPP.chat.sendCatalogMessage('{id}', '{pid}', {{}});
+                    return {{ sentStatus: true }};
+                }} catch (ex) {{
+                    return {{ sentStatus: false, error: String(ex) }};
+                }}
+            }})()"#,
+            id = id,
+            pid = pid,
+        );
+        let v = self.eval_json(&script).await?;
+        Ok(serde_json::from_value(v)?)
+    }
+
+    // ---------- groups ----------
+
     pub async fn get_all_groups(&self) -> Result<Vec<(String, String)>> {
         let v = self
             .eval_json(

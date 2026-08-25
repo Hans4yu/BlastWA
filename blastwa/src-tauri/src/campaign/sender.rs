@@ -14,6 +14,18 @@ use crate::campaign::human_behavior::{
 use crate::message::spintax::spin;
 use crate::message::variables::apply_variables;
 
+/// U15: interactive list message composition (buttons no longer exist in
+/// wa-js v4+; list messages are the supported primitive)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ListMessageSpec {
+    pub title: String,
+    pub description: String,
+    pub button_text: String,
+    pub footer: String,
+    /// single section rows: (row title, row description)
+    pub rows: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CampaignConfig {
     pub account_name: String,
@@ -32,6 +44,11 @@ pub struct CampaignConfig {
     pub schedule_at: Option<chrono::DateTime<chrono::Local>>,
     #[serde(default)]
     pub human: HumanBehaviorConfig,
+    #[serde(default)]
+    pub list_message: Option<ListMessageSpec>,
+    /// when set, a catalog product card is sent instead of text
+    #[serde(default)]
+    pub catalog_product_id: Option<String>,
 }
 
 impl Default for CampaignConfig {
@@ -46,6 +63,8 @@ impl Default for CampaignConfig {
             is_blind_mode: false,
             schedule_at: None,
             human: HumanBehaviorConfig::default(),
+            list_message: None,
+            catalog_product_id: None,
         }
     }
 }
@@ -150,32 +169,72 @@ pub async fn run_campaign(
             break;
         }
 
-        let result = match attachment {
-            Some((bytes, filename)) => {
-                let mime = guess_mime(filename);
-                let data_uri = format!(
-                    "data:{};base64,{}",
-                    mime,
-                    use_base64(bytes)
-                );
-                if mime == "audio/ogg" || filename.ends_with(".ogg") {
-                    injector.send_ptt(&contact.wa_id(), &data_uri).await
-                } else {
-                    let caption = apply_variables(caption_template, contact);
-                    injector
-                        .send_file(
-                            &contact.wa_id(),
-                            &data_uri,
-                            filename,
-                            &caption,
-                            effective_safe,
-                        )
-                        .await
+        // interactive dispatch (U15/U16) takes priority, then attachment,
+        // then plain text
+        let result = if let Some(list_spec) = &cfg.list_message {
+            let title = apply_variables(&spin(&list_spec.title), contact);
+            let description = if list_spec.description.is_empty() {
+                text_body.clone()
+            } else {
+                apply_variables(&spin(&list_spec.description), contact)
+            };
+            let button = apply_variables(&spin(&list_spec.button_text), contact);
+            let rows: Vec<_> = list_spec
+                .rows
+                .iter()
+                .enumerate()
+                .map(|(i, (rt, rd))| {
+                    serde_json::json!({
+                        "rowId": format!("row{}", i + 1),
+                        "title": apply_variables(rt, contact),
+                        "description": apply_variables(rd, contact),
+                    })
+                })
+                .collect();
+            let sections = serde_json::json!([
+                { "title": "Options", "rows": rows }
+            ])
+            .to_string();
+            injector
+                .send_list_message(
+                    &contact.wa_id(),
+                    &title,
+                    &description,
+                    &button,
+                    &list_spec.footer,
+                    &sections,
+                )
+                .await
+        } else if let Some(pid) = &cfg.catalog_product_id {
+            injector.send_catalog_message(&contact.wa_id(), pid).await
+        } else {
+            match attachment {
+                Some((bytes, filename)) => {
+                    let mime = guess_mime(filename);
+                    let data_uri = format!(
+                        "data:{};base64,{}",
+                        mime,
+                        use_base64(bytes)
+                    );
+                    if mime == "audio/ogg" || filename.ends_with(".ogg") {
+                        injector.send_ptt(&contact.wa_id(), &data_uri).await
+                    } else {
+                        let caption = apply_variables(caption_template, contact);
+                        injector
+                            .send_file(
+                                &contact.wa_id(),
+                                &data_uri,
+                                filename,
+                                &caption,
+                                effective_safe,
+                            )
+                            .await
+                    }
                 }
+                None => injector
+                    .send_message(&contact.wa_id(), &text_body, effective_safe)
+                    .await,
             }
-            None => injector
-                .send_message(&contact.wa_id(), &text_body, effective_safe)
-                .await,
         };
 
         let success = matches!(&result, Ok(r) if r.ok());

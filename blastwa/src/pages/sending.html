@@ -46,8 +46,8 @@
     <div class="panel-body">
       <p class="panel-note">Per-campaign settings: applied to this send only.</p>
       <div class="field">
-        <label>Account</label>
-        <select id="account-select"><option value="">Default</option></select>
+        <label>Account(s): ctrl-click / shift-click selects several for multi-channel blast</label>
+        <select id="account-select" multiple size="3"><option value="">Default</option></select>
       </div>
       <div class="row">
         <div class="field" style="flex:1">
@@ -80,6 +80,38 @@
         <label>Schedule (optional: leave empty to send now)</label>
         <input type="datetime-local" id="schedule-at" />
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>Interactive Message (optional)</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body">
+    <p class="panel-note">Sends an interactive message instead of plain text. WhatsApp removed reply buttons from the API layer; list menus and catalog cards are the supported kinds.</p>
+    <div class="row">
+      <select id="imode" style="width:160px">
+        <option value="none">Off (plain text)</option>
+        <option value="list">List menu</option>
+        <option value="catalog">Catalog product card</option>
+      </select>
+    </div>
+    <div id="list-fields" style="display:none;margin-top:8px">
+      <div class="field"><label>List title</label><input type="text" id="list-title" maxlength="60" /></div>
+      <div class="field"><label>Description (empty = use message body)</label><textarea id="list-desc" rows="2"></textarea></div>
+      <div class="field"><label>Button label</label><input type="text" id="list-button" maxlength="20" placeholder="Choose..." /></div>
+      <div class="field"><label>Rows (one per line: title | description)</label>
+        <textarea id="list-rows" rows="3" placeholder="Paket A | hemat 10rb&#10;Paket B | hemat 25rb"></textarea></div>
+    </div>
+    <div id="catalog-fields" style="display:none;margin-top:8px">
+      <div class="row">
+        <button class="btn btn-sm" id="btn-fetch-catalog">Fetch My Catalog</button>
+        <span id="catalog-status" style="font-size:11px;color:var(--text-dim)"></span>
+      </div>
+      <div class="field" style="margin-top:8px"><label>Product (from the selected account's catalog)</label>
+        <select id="catalog-product"><option value="">Fetch products first</option></select></div>
     </div>
   </div>
 </div>
@@ -279,12 +311,80 @@
       }
     };
 
+    // interactive message mode (U15/U16)
+    const imode = $('imode');
+    imode.addEventListener('change', () => {
+      $('list-fields').style.display = imode.value === 'list' ? '' : 'none';
+      $('catalog-fields').style.display = imode.value === 'catalog' ? '' : 'none';
+    });
+
+    $('btn-fetch-catalog').addEventListener('click', async () => {
+      const acct = Array.from($('account-select').selectedOptions)
+        .map((o) => o.value).filter(Boolean)[0];
+      if (!acct) {
+        $('catalog-status').textContent = 'Select an account first.';
+        return;
+      }
+      $('catalog-status').textContent = 'Fetching...';
+      try {
+        const products = await invoke('list_catalog_products', { account: acct });
+        const list = Array.isArray(products) ? products : [];
+        if (!list.length) {
+          $('catalog-status').textContent = 'Catalog is empty or unreachable.';
+          return;
+        }
+        $('catalog-product').innerHTML =
+          '<option value="">Choose a product...</option>' +
+          list.map((p) => `<option value="${p.id}">${p.name || p.id}</option>`).join('');
+        $('catalog-status').textContent = list.length + ' product(s) loaded.';
+      } catch (e) {
+        $('catalog-status').textContent = 'Fetch failed: ' + (e && e.message ? e.message : e);
+      }
+    });
+
+    function interactivePayload() {
+      const mode = $('imode').value;
+      if (mode === 'list') {
+        const rows = $('list-rows').value.split('\n')
+          .map((l) => l.trim()).filter(Boolean)
+          .map((l) => {
+            const [t, d] = l.split('|');
+            return { title: (t || '').trim(), description: (d || '').trim() };
+          })
+          .filter((r) => r.title);
+        if (!rows.length) throw new Error('List menu needs at least one row (title | description).');
+        return {
+          title: $('list-title').value,
+          description: $('list-desc').value,
+          button_text: $('list-button').value || 'Choose',
+          footer: '',
+          rows,
+        };
+      }
+      if (mode === 'catalog') {
+        const pid = $('catalog-product').value;
+        if (!pid) throw new Error('Fetch your catalog and choose a product first.');
+        return { catalogProductId: pid };
+      }
+      return {};
+    }
+
     $('btn-start').onclick = async () => {
       try {
+        let interactive = interactivePayload();
+        var payloadExtra = {};
+        if (interactive.catalogProductId) {
+          payloadExtra.catalogProductId = interactive.catalogProductId;
+        } else if (interactive.rows) {
+          payloadExtra.listMessage = interactive;
+        }
         const scheduleRaw = $('schedule-at').value;
+        const selected = Array.from($('account-select').selectedOptions)
+          .map((o) => o.value).filter(Boolean);
         const r = await invoke('start_campaign', {
           message: $('msg-body').value,
-          account: $('account-select').value,
+          account: selected[0] || '',
+          accounts: selected.length > 1 ? selected : null,
           delayMinS: Number($('delay-min').value),
           delayMaxS: Number($('delay-max').value),
           humanPreset: $('human-preset').value,
@@ -293,10 +393,14 @@
           isSafeMode: $('safe-mode').checked,
           isBlindMode: $('blind-mode').checked,
           scheduleAt: scheduleRaw || null,
+          ...payloadExtra,
         });
         const nVariants = r && r.variants ? r.variants : 1;
-        $('current-status').textContent =
-          nVariants > 1 ? `${nVariants} message variants rotating across contacts` : '';
+        let statusLine = nVariants > 1 ? `${nVariants} message variants rotating across contacts` : '';
+        if (selected.length > 1) {
+          statusLine += `${statusLine ? '; ' : ''}${selected.length}-account multi-channel (blind mode forced)`;
+        }
+        $('current-status').textContent = statusLine;
         if (r && r.scheduled_at) {
           startCountdown(r.scheduled_at);
         }
