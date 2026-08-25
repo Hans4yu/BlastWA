@@ -142,7 +142,7 @@
       try {
         const path = await tauriDialog.save({
           title: 'Export groups',
-          defaultPath: 'blastwa-groups.csv',
+          defaultPath: window.blastwa.stampName('blastwa-groups', 'csv'),
           filters: [{ name: 'CSV', extensions: ['csv'] }],
         });
         if (!path) return;
@@ -178,7 +178,7 @@
       try {
         const path = await tauriDialog.save({
           title: 'Export groups to Excel',
-          defaultPath: 'blastwa-groups.xlsx',
+          defaultPath: window.blastwa.stampName('blastwa-groups', 'xlsx'),
           filters: [{ name: 'Excel', extensions: ['xlsx'] }],
         });
         if (!path) return;

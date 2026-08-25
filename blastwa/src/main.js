@@ -315,5 +315,15 @@ window.addEventListener('DOMContentLoaded', () => {
   refreshStatus();
 });
 
+// timestamped default filename for save dialogs (U7):
+// stampName('blastwa-groups', 'csv') -> 'blastwa-groups-2026-08-25-1442.csv'
+function stampName(base, ext) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-` +
+    `${p(d.getHours())}${p(d.getMinutes())}`;
+  return `${base}-${stamp}.${ext}`;
+}
+
 // shared helpers usable by pages
-window.blastwa = { invoke, listen, isTauri, addCleanup };
+window.blastwa = { invoke, listen, isTauri, addCleanup, stampName };

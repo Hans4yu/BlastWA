@@ -13,7 +13,10 @@ use blastwa_core::campaign::contact_list::ContactList;
 use blastwa_core::campaign::group_grabber;
 use blastwa_core::campaign::human_behavior::{HumanBehaviorConfig, Preset};
 use blastwa_core::campaign::import as csv_import;
-use blastwa_core::campaign::log_exporter::{export_csv, export_xlsx, LogEntry};
+use blastwa_core::campaign::log_exporter::{
+    append_campaign_record, export_csv, export_xlsx, finalize_last_campaign_record,
+    interrupt_stale_running_records, load_campaign_records, CampaignRecord, LogEntry,
+};
 use blastwa_core::campaign::pipeline::Pipeline;
 use blastwa_core::campaign::sender::{run_campaign, CampaignConfig, ProgressEvent};
 use blastwa_core::config::settings::{AppConfig, DataPaths};
@@ -416,6 +419,24 @@ async fn start_campaign(
     let campaign_name = format!("{} {}", account, chrono::Local::now().format("%d-%m %H:%M"));
     let queued = contacts.len();
 
+    // campaign history: append the record now, finalize it when the loop
+    // returns (U6)
+    let started_at = chrono::Local::now();
+    let start_record = CampaignRecord {
+        started_at,
+        account: account.clone(),
+        message_preview: message.chars().take(80).collect(),
+        total: queued as u32,
+        sent: 0,
+        failed: 0,
+        status: "running".into(),
+    };
+    if let Err(e) = append_campaign_record(&AppConfig::app_dir(), &start_record) {
+        log::warn!("failed to write campaign history: {e:#}");
+    }
+    let account_for_history = account.clone();
+    let token_for_status = token.clone();
+
     tauri::async_runtime::spawn(async move {
         let app_for_progress = app.clone();
         let _ = run_campaign(
@@ -443,6 +464,23 @@ async fn start_campaign(
             },
         )
         .await;
+        // finalize the history record with the real counters (U6)
+        let finished = CampaignRecord {
+            started_at,
+            account: account_for_history,
+            message_preview: start_record.message_preview,
+            total: state.total.load(Ordering::Relaxed),
+            sent: state.sent.load(Ordering::Relaxed),
+            failed: state.failed.load(Ordering::Relaxed),
+            status: if token_for_status.is_cancelled() {
+                "stopped".into()
+            } else {
+                "completed".into()
+            },
+        };
+        if let Err(e) = finalize_last_campaign_record(&AppConfig::app_dir(), &finished) {
+            log::warn!("failed to finalize campaign history: {e:#}");
+        }
         state.running.store(false, Ordering::Relaxed);
     });
 
@@ -743,6 +781,12 @@ fn get_logs(ctx: State<'_, AppCtx>) -> Result<Vec<LogEntry>, String> {
     Ok(logs.iter().rev().take(500).cloned().collect())
 }
 
+/// persistent per-campaign history, newest first (U6)
+#[tauri::command]
+fn list_sent_campaigns() -> Vec<CampaignRecord> {
+    load_campaign_records(&AppConfig::app_dir())
+}
+
 #[tauri::command]
 fn export_log(
     format: String,
@@ -917,6 +961,11 @@ fn main() {
     let cfg = AppConfig::load_or_default();
     let paths = cfg.init_data_dirs().expect("init data dirs");
 
+    // campaigns left "running" by a dead process are now interrupted (U6)
+    if let Err(e) = interrupt_stale_running_records(&AppConfig::app_dir()) {
+        log::warn!("campaign history sweep failed: {e:#}");
+    }
+
     let (tx, rx) = tokio::sync::mpsc::channel::<server::BlastRequest>(16);
     let state = AppState {
         running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -999,6 +1048,7 @@ fn main() {
             load_rules, save_rules,
             list_templates, search_templates, save_template, delete_template,
             get_logs, export_log,
+            list_sent_campaigns,
             get_config, save_config, preview_spintax,
             get_wpp_version, check_wpp_update, update_wpp,
             open_profile_window, list_profiles,
