@@ -351,7 +351,7 @@ impl JsInjector {
         Ok(out)
     }
 
-    pub async fn get_group_participants(&self, group_id: &str) -> Result<Vec<String>> {
+    pub async fn get_group_participants(&self, group_id: &str) -> Result<Vec<(String, Option<String>)>> {
         let gid = js_escape(group_id);
         let script = format!(
             r#"(async () => {{
@@ -361,18 +361,22 @@ impl JsInjector {
                     // @lid linked identities with no phone number attached.
                     // resolve each through the contact store; unresolved lids
                     // are skipped since a blast to a lid id cannot be routed.
-                    var ids = await Promise.all(p.map(async function(x) {{
+                    var rows = await Promise.all(p.map(async function(x) {{
                         var sid = (x.id && x.id._serialized) ? String(x.id._serialized) : String(x);
-                        if (sid.indexOf('@lid') === -1) return sid;
+                        var push = x.pushname || x.name || null;
+                        if (sid.indexOf('@lid') === -1) {{
+                            return {{ number: sid, name: push }};
+                        }}
                         try {{
                             var c = await WPP.contact.get(sid);
                             if (c && c.phoneNumber && c.phoneNumber._serialized) {{
-                                return String(c.phoneNumber._serialized);
+                                var cname = c.name || c.pushName || push || null;
+                                return {{ number: String(c.phoneNumber._serialized), name: cname }};
                             }}
                         }} catch (e) {{}}
                         return null;
                     }}));
-                    return ids.filter(function(x) {{ return x !== null; }});
+                    return rows.filter(function(x) {{ return x !== null; }});
                 }} catch (ex) {{ return []; }}
             }})()"#,
             gid = gid
@@ -380,10 +384,17 @@ impl JsInjector {
         let v = self.eval_json(&script).await?;
         let mut out = Vec::new();
         if let Some(arr) = v.as_array() {
-            for s in arr {
-                if let Some(str_s) = s.as_str() {
-                    out.push(str_s.to_string());
+            for o in arr {
+                let number = o.get("number").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                if number.is_empty() {
+                    continue;
                 }
+                let name = o
+                    .get("name")
+                    .and_then(|x| x.as_str())
+                    .map(|x| x.to_string())
+                    .filter(|x| !x.is_empty());
+                out.push((number, name));
             }
         }
         Ok(out)

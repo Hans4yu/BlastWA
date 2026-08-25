@@ -20,14 +20,15 @@ pub async fn grab_participants(
     injector: &JsInjector,
     group_id: &str,
 ) -> anyhow::Result<Vec<ContactRow>> {
-    let ids = injector.get_group_participants(group_id).await?;
-    let mut rows = Vec::with_capacity(ids.len());
-    for wa_id in ids {
+    let parts = injector.get_group_participants(group_id).await?;
+    let mut rows = Vec::with_capacity(parts.len());
+    for (wa_id, name) in parts {
         let number = normalize_number(wa_id.trim_end_matches("@c.us"));
         if number.is_empty() || wa_id.ends_with("@g.us") {
             continue; // skip sub-groups inside groups
         }
-        rows.push(ContactRow::from_fullname(&number, ""));
+        // pushname / contact name lands in fullname when available
+        rows.push(ContactRow::from_fullname(&number, name.as_deref().unwrap_or("")));
     }
     Ok(rows)
 }
