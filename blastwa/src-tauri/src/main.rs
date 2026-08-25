@@ -21,7 +21,7 @@ use blastwa_core::message::spintax;
 use blastwa_core::message::template_library::{MessageTemplate, TemplateLibrary};
 use blastwa_core::updater::wpp_updater;
 
-use tauri::State;
+use tauri::{Emitter, State};
 
 struct AppCtx {
     cfg: Mutex<AppConfig>,
@@ -346,6 +346,7 @@ async fn start_campaign(
     attachment_path: Option<String>,
     caption: Option<String>,
     ctx: State<'_, AppCtx>,
+    app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
     if ctx.state.running.load(Ordering::Relaxed) {
         return Err("campaign already running".into());
@@ -414,6 +415,7 @@ async fn start_campaign(
     let queued = contacts.len();
 
     tauri::async_runtime::spawn(async move {
+        let app_for_progress = app.clone();
         let _ = run_campaign(
             injector,
             &contacts,
@@ -433,6 +435,8 @@ async fn start_campaign(
                     error_reason: None,
                     campaign_name: campaign_name.clone(),
                 });
+                // live progress: the sending page listens for this exact event
+                let _ = app_for_progress.emit("campaign_progress", &p);
             },
         )
         .await;

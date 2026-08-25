@@ -235,3 +235,27 @@ fn use_base64(data: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.encode(data)
 }
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+
+    #[test]
+    fn progress_event_payload_shape() {
+        // the sending page reads ev.payload.sent/failed/pending/current_number/status
+        // - field names are the IPC contract, renaming them breaks the ui silently
+        let v = serde_json::to_value(ProgressEvent {
+            sent: 1,
+            failed: 2,
+            pending: 3,
+            current_number: "628123".into(),
+            status: "sent".into(),
+        })
+        .unwrap();
+        assert_eq!(v["sent"], 1);
+        assert_eq!(v["failed"], 2);
+        assert_eq!(v["pending"], 3);
+        assert_eq!(v["current_number"], "628123");
+        assert_eq!(v["status"], "sent");
+    }
+}
