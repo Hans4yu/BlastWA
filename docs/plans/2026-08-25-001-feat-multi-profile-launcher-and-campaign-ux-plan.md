@@ -110,7 +110,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ## Implementation Units
 
-- [ ] U1. **Profile-aware data root**
+- [x] U1. **Profile-aware data root**
 
 **Goal:** `--profile <name>` isolates all app data under `profiles/<name>/`.
 
@@ -141,7 +141,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U2. **Profile launcher + per-profile API port**
+- [x] U2. **Profile launcher + per-profile API port**
 
 **Goal:** Open additional BlastWA windows bound to profiles from the File menu; API ports never collide between profiles.
 
