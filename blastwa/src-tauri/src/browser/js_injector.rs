@@ -357,7 +357,22 @@ impl JsInjector {
             r#"(async () => {{
                 try {{
                     var p = await WPP.group.getParticipants('{gid}');
-                    return p.map(function(x){{ return (x.id && x.id._serialized) ? x.id._serialized : String(x); }});
+                    // whatsapp's lid era: participant ids often come back as
+                    // @lid linked identities with no phone number attached.
+                    // resolve each through the contact store; unresolved lids
+                    // are skipped since a blast to a lid id cannot be routed.
+                    var ids = await Promise.all(p.map(async function(x) {{
+                        var sid = (x.id && x.id._serialized) ? String(x.id._serialized) : String(x);
+                        if (sid.indexOf('@lid') === -1) return sid;
+                        try {{
+                            var c = await WPP.contact.get(sid);
+                            if (c && c.phoneNumber && c.phoneNumber._serialized) {
+                                return String(c.phoneNumber._serialized);
+                            }
+                        }} catch (e) {{}}
+                        return null;
+                    }}));
+                    return ids.filter(function(x) {{ return x !== null; }});
                 }} catch (ex) {{ return []; }}
             }})()"#,
             gid = gid
