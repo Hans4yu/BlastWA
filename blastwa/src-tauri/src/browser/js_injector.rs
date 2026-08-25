@@ -142,13 +142,30 @@ impl JsInjector {
         };
         log::info!("executing WPP.js bundle ({} kb) via CDP evaluate", source.len() / 1024);
 
-        // execute the bundle directly in page main world via CDP.
-        // wrap in IIFE so top-level returns in the bundle don't clash.
-        let exec = format!("(function(){{\n{}\n}})()", source);
-        self.page
-            .evaluate(exec)
-            .await
-            .context("executing WPP.js bundle via cdp")?;
+        // execute the bundle in page main world via CDP — but transfer it in
+        // chunks: a single multi-megabyte Runtime.evaluate resets the
+        // chromiumoxide websocket mid-flight, killing every later call with
+        // "cdp evaluate failed". assemble the source in a page variable and
+        // indirect-eval it once complete.
+        const CHUNK: usize = 256 * 1024;
+        let wrapped = format!("(function(){{\n{}\n}})()", source);
+        self.eval_json("window.__bw_wpp = ''; window.__bw_wpp.length").await?;
+        let mut start = 0;
+        while start < wrapped.len() {
+            let mut end = (start + CHUNK).min(wrapped.len());
+            while end < wrapped.len() && !wrapped.is_char_boundary(end) {
+                end += 1;
+            }
+            let lit = serde_json::to_string(&wrapped[start..end])?;
+            self.eval_json(&format!("window.__bw_wpp += {}; window.__bw_wpp.length", lit))
+                .await?;
+            start = end;
+        }
+        self.eval_json(
+            "(function(){ try { (0,eval)(window.__bw_wpp); return true; } finally { try { delete window.__bw_wpp; } catch(e) {} } })()",
+        )
+        .await
+        .context("executing WPP.js bundle via cdp")?;
 
         // poll until WPP.isReady
         let deadline = tokio::time::Instant::now()
