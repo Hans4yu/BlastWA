@@ -22,6 +22,7 @@
     </div>
     <div class="counts-bar">
       <span>Total: <b id="groups-total">0</b></span>
+      <button class="btn btn-sm" id="btn-refresh-groups">Refresh</button>
     </div>
   </div>
 </div>
@@ -98,6 +99,10 @@
         btn.addEventListener('click', () => grab(btn.dataset.gid, btn));
       });
     }
+
+    $('btn-refresh-groups').addEventListener('click', () => {
+      refresh().catch((e) => showEmpty('Refresh failed: ' + (e && e.message ? e.message : e)));
+    });
 
     await refresh();
   };

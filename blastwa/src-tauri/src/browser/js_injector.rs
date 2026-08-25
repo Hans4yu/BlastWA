@@ -329,10 +329,14 @@ impl JsInjector {
             .eval_json(
                 r#"(async function(){
                     try {
-                        var gs = await WPP.group.getAll();
-                        return gs.map(function(g){ return {{id: g.id._serialized || g.gid._serialized || '', name: g.name || g.subject || ''}}; });
-                    } catch(e) {{ return []; }}
-                }})()"#,
+                        var gs = await WPP.group.getAllGroups();
+                        return gs.map(function(g){
+                            var id = (g.id && (g.id._serialized || g.id.id)) || g.gid || '';
+                            var name = g.formattedTitle || (g.contact && g.contact.name) || g.name || g.subject || '';
+                            return {id: String(id), name: String(name)};
+                        });
+                    } catch(e) { return []; }
+                })()"#,
             )
             .await?;
         let mut out = Vec::new();
