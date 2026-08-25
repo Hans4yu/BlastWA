@@ -497,6 +497,30 @@ fn import_contacts(
     Ok(serde_json::json!({ "ok": true, "imported": count }))
 }
 
+#[tauri::command]
+fn export_groups(
+    path: String,
+    groups: Vec<serde_json::Value>,
+    ctx: State<'_, AppCtx>,
+) -> Result<serde_json::Value, String> {
+    let _ = &ctx;
+    let mut wtr = csv::Writer::from_path(&path).map_err(|e| e.to_string())?;
+    wtr.write_record(["Group Name", "Group ID"])
+        .map_err(|e| e.to_string())?;
+    let mut count = 0usize;
+    for g in &groups {
+        let name = g.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let id = g.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        if id.is_empty() {
+            continue;
+        }
+        wtr.write_record([name, id]).map_err(|e| e.to_string())?;
+        count += 1;
+    }
+    wtr.flush().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "ok": true, "exported": count }))
+}
+
 // ---------- groups ----------
 
 #[tauri::command]
@@ -741,7 +765,7 @@ fn main() {
             list_accounts, add_account, remove_account, open_browser,
             start_campaign, pause_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
-            list_groups, grab_participants, check_numbers_cmd,
+            list_groups, grab_participants, export_groups, check_numbers_cmd,
             load_rules, save_rules,
             list_templates, search_templates, save_template, delete_template,
             get_logs, export_log,

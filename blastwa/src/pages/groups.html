@@ -22,6 +22,7 @@
     </div>
     <div class="counts-bar">
       <span>Total: <b id="groups-total">0</b></span>
+      <button class="btn btn-sm" id="btn-export-groups">Export CSV</button>
       <button class="btn btn-sm" id="btn-refresh-groups">Refresh</button>
     </div>
   </div>
@@ -99,6 +100,34 @@
         btn.addEventListener('click', () => grab(btn.dataset.gid, btn));
       });
     }
+
+    $('btn-export-groups').addEventListener('click', async () => {
+      const rows = Array.from($('groups-body').querySelectorAll('tr')).map((tr) => ({
+        name: tr.querySelector('td b') ? tr.querySelector('td b').textContent : '',
+        id: tr.querySelectorAll('td')[1] ? tr.querySelectorAll('td')[1].textContent : '',
+      }));
+      if (!rows.length) {
+        alert('No groups to export. Fetch the list first.');
+        return;
+      }
+      const tauriDialog = window.__TAURI__ && window.__TAURI__.dialog;
+      if (!tauriDialog || !tauriDialog.save) {
+        alert('[mock] would export ' + rows.length + ' groups (browser dev mode)');
+        return;
+      }
+      try {
+        const path = await tauriDialog.save({
+          title: 'Export groups',
+          defaultPath: 'blastwa-groups.csv',
+          filters: [{ name: 'CSV', extensions: ['csv'] }],
+        });
+        if (!path) return;
+        const r = await invoke('export_groups', { path, groups: rows });
+        alert('Exported ' + ((r && r.exported) ?? 0) + ' groups to ' + path);
+      } catch (e) {
+        alert('Export failed: ' + (e && e.message ? e.message : e));
+      }
+    });
 
     $('btn-refresh-groups').addEventListener('click', () => {
       refresh().catch((e) => showEmpty('Refresh failed: ' + (e && e.message ? e.message : e)));
