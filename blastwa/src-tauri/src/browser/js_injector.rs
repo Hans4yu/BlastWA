@@ -366,9 +366,9 @@ impl JsInjector {
                         if (sid.indexOf('@lid') === -1) return sid;
                         try {{
                             var c = await WPP.contact.get(sid);
-                            if (c && c.phoneNumber && c.phoneNumber._serialized) {
+                            if (c && c.phoneNumber && c.phoneNumber._serialized) {{
                                 return String(c.phoneNumber._serialized);
-                            }
+                            }}
                         }} catch (e) {{}}
                         return null;
                     }}));
