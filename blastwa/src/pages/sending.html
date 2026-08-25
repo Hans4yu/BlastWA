@@ -14,6 +14,15 @@
     <div class="panel-body">
       <div class="field">
         <label>Message body (supports spintax {a|b} and [[firstname]] variables</label>
+        <div class="fmt-toolbar" id="fmt-toolbar">
+          <button type="button" class="fmt-btn fmt-bold" data-wrap="*" title="Bold">B</button>
+          <button type="button" class="fmt-btn fmt-italic" data-wrap="_" title="Italic">I</button>
+          <button type="button" class="fmt-btn fmt-strike" data-wrap="~" title="Strikethrough">S</button>
+          <button type="button" class="fmt-btn fmt-mono" data-wrap="```" title="Monospace">&lt;/&gt;</button>
+          <span class="fmt-sep"></span>
+          <button type="button" class="fmt-btn" id="btn-emoji" title="Emoji">&#128512;</button>
+        </div>
+        <div class="emoji-grid hidden" id="emoji-grid"></div>
         <textarea id="msg-body" placeholder="Hai [[firstname]]! Dapat promo {spesial|keren} nih..."></textarea>
         <div id="preview-out" class="preview-out" style="display:none"></div>
       </div>
@@ -35,6 +44,7 @@
       <span class="panel-menu">&#9776;</span>
     </div>
     <div class="panel-body">
+      <p class="panel-note">Per-campaign settings: applied to this send only.</p>
       <div class="field">
         <label>Account</label>
         <select id="account-select"><option value="">Default</option></select>
@@ -133,6 +143,57 @@
       $(id).addEventListener('input', saveDraft);
       $(id).addEventListener('change', saveDraft);
     }
+
+    // formatting toolbar (U4): wraps the current selection in whatsapp
+    // formatting tokens, or inserts around an empty cursor. mousedown is
+    // prevented so the textarea never loses focus or its live selection.
+    const msgBody = $('msg-body');
+
+    function insertAroundToken(token) {
+      const start = msgBody.selectionStart ?? msgBody.value.length;
+      const end = msgBody.selectionEnd ?? start;
+      const sel = msgBody.value.slice(start, end);
+      msgBody.value =
+        msgBody.value.slice(0, start) + token + sel + token + msgBody.value.slice(end);
+      // cursor lands right after the wrapped content
+      const caret = start + token.length + sel.length + token.length;
+      msgBody.focus();
+      msgBody.setSelectionRange(caret, caret);
+      saveDraft();
+    }
+
+    for (const btn of document.querySelectorAll('#fmt-toolbar .fmt-btn[data-wrap]')) {
+      btn.addEventListener('mousedown', (e) => e.preventDefault());
+      btn.addEventListener('click', () => insertAroundToken(btn.dataset.wrap));
+    }
+
+    // emoji picker: fixed palette (no network), inserts at cursor position
+    const EMOJIS = ['😀','😂','🥹','😍','😎','🤔','😴','😭','😡','👍','🙏','👏','💪','🔥','✨','❤️','💚','🎉','🎁','💰','📢','✅','⚠️','📞'];
+    const emojiGrid = $('emoji-grid');
+    emojiGrid.innerHTML = EMOJIS.map((em) =>
+      `<button type="button" class="emoji-pick" data-emoji="${em}">${em}</button>`
+    ).join('');
+
+    $('btn-emoji').addEventListener('mousedown', (e) => e.preventDefault());
+    $('btn-emoji').addEventListener('click', () => {
+      emojiGrid.classList.toggle('hidden');
+      $('btn-emoji').classList.toggle('active', !emojiGrid.classList.contains('hidden'));
+    });
+
+    emojiGrid.addEventListener('mousedown', (e) => e.preventDefault());
+    emojiGrid.addEventListener('click', (ev) => {
+      const pick = ev.target.closest('.emoji-pick');
+      if (!pick) return;
+      const em = pick.dataset.emoji;
+      const pos = msgBody.selectionStart ?? msgBody.value.length;
+      const end = msgBody.selectionEnd ?? pos;
+      msgBody.value =
+        msgBody.value.slice(0, pos) + em + msgBody.value.slice(end);
+      const caret = pos + em.length;
+      msgBody.focus();
+      msgBody.setSelectionRange(caret, caret);
+      saveDraft();
+    });
 
     // tauri v2 hides the real path from <input type=file>, so intercept the
     // picker and use the dialog plugin (browser dev keeps the native input)
