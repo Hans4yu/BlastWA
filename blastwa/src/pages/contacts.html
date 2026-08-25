@@ -67,6 +67,7 @@
         <select id="check-account" style="width:180px"><option value="">Default</option></select>
         <button class="btn btn-sm" id="btn-run-check">Run Check</button>
         <button class="btn btn-sm" id="btn-keep-valid" disabled>Keep Valid Only</button>
+        <button class="btn btn-sm" id="btn-export-valid" disabled>Export CSV (valid)</button>
       </div>
       <span id="check-summary" style="font-size:11px;color:var(--text-dim)"></span>
     </div>
@@ -160,23 +161,92 @@
       }
     });
 
+    // checker results survive tab switches: route() wipes the dom on every
+    // navigation, so the last completed check lives in localstorage and is
+    // restored here. same shape discipline as the groups cache.
+    const CHECK_CACHE_KEY = 'blastwa.check.cache';
+
+    function readRawCheckCache() {
+      try { return JSON.parse(localStorage.getItem(CHECK_CACHE_KEY) || 'null'); } catch (e) { return null; }
+    }
+    function saveCheckCache(account, outcomes) {
+      try {
+        localStorage.setItem(CHECK_CACHE_KEY, JSON.stringify({ account, fetchedAt: Date.now(), outcomes }));
+      } catch (e) {}
+    }
+    function clearCheckCache() {
+      try { localStorage.removeItem(CHECK_CACHE_KEY); } catch (e) {}
+    }
+
     let validNumbers = [];
+    let lastOutcomes = [];
+
+    function applyValidState(outcomes) {
+      validNumbers = outcomes.filter((o) => o.exists).map((o) => o.number);
+      document.getElementById('btn-keep-valid').disabled = !validNumbers.length;
+      document.getElementById('btn-export-valid').disabled = !validNumbers.length;
+    }
+
+    function renderCheckRows(outcomes) {
+      const body = document.getElementById('check-body');
+      body.innerHTML = outcomes.map((o, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td class="mono">${esc(o.number)}</td>
+          <td><span class="badge ${o.exists ? 'badge-green' : 'badge-red'}">${o.exists ? 'yes' : 'no'}</span></td>
+          <td>${esc(o.kind || '')}</td>
+        </tr>`).join('');
+      document.getElementById('check-empty').style.display = outcomes.length ? 'none' : '';
+    }
+
+    function checkAgeLabel(fetchedAt) {
+      if (!fetchedAt) return 'earlier';
+      const s = Math.max(0, Math.round((Date.now() - fetchedAt) / 1000));
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h / 24)}d ago`;
+    }
+
+    function restoreCheckFromCache() {
+      const c = readRawCheckCache();
+      if (!c || !Array.isArray(c.outcomes) || !c.outcomes.length) return false;
+      lastOutcomes = c.outcomes;
+      renderCheckRows(c.outcomes);
+      applyValidState(c.outcomes);
+      const sel = document.getElementById('check-account');
+      if (c.account && Array.from(sel.options).some((o) => o.value === c.account)) sel.value = c.account;
+      document.getElementById('check-summary').textContent =
+        `cached ${checkAgeLabel(c.fetchedAt)} · ${validNumbers.length} of ${c.outcomes.length} valid`;
+      return true;
+    }
+
+    restoreCheckFromCache();
+
     const unlistenCheck = await listen('check_progress', (ev) => {
       const p = ev.payload || ev;
       appendCheckRow(p);
-      if (p.exists) validNumbers.push(p.number);
-      const found = validNumbers.length;
+      lastOutcomes.push({ number: p.number, exists: !!p.exists, kind: p.kind || '' });
+      // persist incrementally: a crash or tab switch mid-check keeps what ran
+      saveCheckCache(document.getElementById('check-account').value, lastOutcomes);
+      applyValidState(lastOutcomes);
       document.getElementById('check-summary').textContent =
-        `checked ${p.checked}/${p.total}, ${found} valid`;
+        `checked ${p.checked}/${p.total}, ${validNumbers.length} valid`;
     });
     addCleanup(unlistenCheck);
 
     document.getElementById('btn-run-check').addEventListener('click', async () => {
       const btn = document.getElementById('btn-run-check');
+      // an explicit fresh check may wipe the previous results, same contract
+      // as the groups explicit refresh
+      lastOutcomes = [];
       validNumbers = [];
       document.getElementById('check-body').innerHTML = '';
       document.getElementById('check-empty').style.display = 'none';
       document.getElementById('btn-keep-valid').disabled = true;
+      document.getElementById('btn-export-valid').disabled = true;
       btn.disabled = true;
       btn.textContent = 'Checking...';
       try {
@@ -184,13 +254,18 @@
           account: document.getElementById('check-account').value,
         });
         const list = Array.isArray(outcomes) ? outcomes : [];
-        validNumbers = list.filter((o) => o.exists).map((o) => o.number);
-        document.getElementById('btn-keep-valid').disabled = !validNumbers.length;
+        lastOutcomes = list.map((o) => ({ number: o.number, exists: !!o.exists, kind: o.kind || '' }));
+        saveCheckCache(document.getElementById('check-account').value, lastOutcomes);
+        renderCheckRows(lastOutcomes);
+        applyValidState(lastOutcomes);
         document.getElementById('check-summary').textContent =
-          `done: ${validNumbers.length} of ${list.length} numbers are on whatsapp`;
+          `done: ${validNumbers.length} of ${lastOutcomes.length} numbers are on whatsapp`;
       } catch (e) {
-        document.getElementById('check-summary').textContent = '';
-        document.getElementById('check-empty').style.display = '';
+        // keep serving whatever the previous check had instead of blanking
+        if (!restoreCheckFromCache()) {
+          document.getElementById('check-summary').textContent = '';
+          document.getElementById('check-empty').style.display = '';
+        }
         alert('Check failed: ' + (e && e.message ? e.message : e));
       } finally {
         btn.disabled = false;
@@ -205,12 +280,42 @@
         const r = await invoke('keep_contacts_only', { validNumbers });
         alert('Send list now holds ' + ((r && r.kept) ?? 0) + ' valid contacts.');
         await refresh();
+        lastOutcomes = [];
         document.getElementById('check-body').innerHTML = '';
         document.getElementById('check-empty').style.display = '';
         document.getElementById('btn-keep-valid').disabled = true;
+        document.getElementById('btn-export-valid').disabled = true;
         document.getElementById('check-summary').textContent = '';
+        clearCheckCache();
       } catch (e) {
         alert('Filter failed: ' + (e && e.message ? e.message : e));
+      }
+    });
+
+    // csv holds only the rows that answered yes — that is what this button
+    // promises, so the filter lives in one place next to the data
+    document.getElementById('btn-export-valid').addEventListener('click', async () => {
+      const valid = lastOutcomes.filter((o) => o.exists);
+      if (!valid.length) {
+        alert('No valid numbers to export. Run a check first.');
+        return;
+      }
+      const tauriDialog = window.__TAURI__ && window.__TAURI__.dialog;
+      if (!tauriDialog || !tauriDialog.save) {
+        alert('[mock] would export ' + valid.length + ' valid numbers (browser dev mode)');
+        return;
+      }
+      try {
+        const path = await tauriDialog.save({
+          title: 'Export valid numbers',
+          defaultPath: window.blastwa.stampName('blastwa-valid-numbers', 'csv'),
+          filters: [{ name: 'CSV', extensions: ['csv'] }],
+        });
+        if (!path) return;
+        const r = await invoke('export_valid_numbers', { path, outcomes: valid });
+        alert('Exported ' + ((r && r.exported) ?? 0) + ' valid numbers to ' + path);
+      } catch (e) {
+        alert('Export failed: ' + (e && e.message ? e.message : e));
       }
     });
   };

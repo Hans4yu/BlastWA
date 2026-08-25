@@ -706,6 +706,34 @@ fn export_groups(
     Ok(serde_json::json!({ "ok": true, "exported": count }))
 }
 
+/// csv of only the checker rows that answered yes; the frontend filters,
+/// this command re-filters anyway so the file contract cannot drift
+#[tauri::command]
+async fn export_valid_numbers(
+    path: String,
+    outcomes: Vec<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let mut wtr = csv::Writer::from_path(&path).map_err(|e| e.to_string())?;
+    wtr.write_record(["Number", "Type"])
+        .map_err(|e| e.to_string())?;
+    let mut count = 0usize;
+    for o in &outcomes {
+        let exists = o.get("exists").and_then(|v| v.as_bool()).unwrap_or(false);
+        if !exists {
+            continue;
+        }
+        let number = o.get("number").and_then(|v| v.as_str()).unwrap_or("");
+        if number.is_empty() {
+            continue;
+        }
+        let kind = o.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+        wtr.write_record([number, kind]).map_err(|e| e.to_string())?;
+        count += 1;
+    }
+    wtr.flush().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "ok": true, "exported": count }))
+}
+
 #[tauri::command]
 async fn export_groups_xlsx(
     account: String,
@@ -1261,7 +1289,7 @@ fn main() {
             start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
-            keep_contacts_only, add_generated_contacts,
+            keep_contacts_only, add_generated_contacts, export_valid_numbers,
             import_wa_contacts, list_catalog_products,
             load_rules, save_rules,
             list_templates, search_templates, save_template, delete_template,
