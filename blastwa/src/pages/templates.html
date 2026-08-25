@@ -49,7 +49,10 @@
 </div>
 
 <script>
-  let editingId = null;
+  // id of the template being edited, null for a new one. var, not let:
+  // scripts re-execute per navigation and a top-level lexical binding would
+  // throw 'already declared' on the second visit to this tab
+  var editingId = null;
 
   window.init_templates = async function () {
     const { invoke } = window.blastwa;
@@ -57,11 +60,10 @@
     await refresh();
   };
 
-  function esc(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    })[c]);
-  }
+  // shared esc() from window.blastwa (hoisted in main.js); var, not const,
+  // because scripts re-execute per navigation and top-level const would
+  // throw 'already declared' on the second visit
+  var esc = window.blastwa.esc;
 
   async function refresh() {
     const { invoke } = window.blastwa;

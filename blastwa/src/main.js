@@ -325,5 +325,13 @@ function stampName(base, ext) {
   return `${base}-${stamp}.${ext}`;
 }
 
+// escape a value for safe interpolation into innerHTML templates.
+// single shared spelling; pages alias it via window.blastwa.esc.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[c]);
+}
+
 // shared helpers usable by pages
-window.blastwa = { invoke, listen, isTauri, addCleanup, stampName };
+window.blastwa = { invoke, listen, isTauri, addCleanup, stampName, esc };

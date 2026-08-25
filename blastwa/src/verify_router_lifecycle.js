@@ -48,6 +48,9 @@ function makeWindow() {
       listen: async () => () => {},
       addCleanup: () => {},
       isTauri: false,
+      esc: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[c]),
     },
   };
   win.window = win;
@@ -95,6 +98,38 @@ for (const page of PAGES) {
   }
 }
 
+// shared-context pass: real tab switching happens in ONE document, so all
+// page scripts share the same global lexical environment for the app's whole
+// lifetime. execute every page's script in a single window, twice, in
+// toolbar order; any 'already declared' collision or cross-page clobbering
+// fails here.
+{
+  // makeWindow() already installs blastwa.esc; no reassignment needed here.
+  const win = makeWindow();
+  const ctx = vm.createContext(win);
+  try {
+    for (let round = 1; round <= 2; round++) {
+      for (const page of PAGES) {
+        const html = fs.readFileSync(path.join(__dirname, 'pages', page + '.html'), 'utf8');
+        const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+        for (const code of scripts) {
+          vm.runInContext(code, ctx, { filename: `${page}.html[shared r${round}]` });
+        }
+        if (typeof win[`init_${page}`] === 'function') {
+          // eslint-disable-next-line no-await-in-loop
+          await win[`init_${page}`]();
+        } else {
+          console.log(`FAIL shared nav r${round} ${page}: init hook missing`);
+          failures++;
+        }
+      }
+    }
+  } catch (e) {
+    console.log(`FAIL shared-context navigation sequence: ${e.message}`);
+    failures++;
+  }
+}
+
 // verify main.js itself parses as a module and contains the lifecycle guards
 const mainjs = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
 const checks = [
@@ -105,9 +140,29 @@ const checks = [
   ['nav epoch guard exists', /navEpoch\+\+/.test(mainjs)],
   ['page cleanups run on navigation', /runPageCleanups\(\)/.test(mainjs)],
   ['stale listener registration dropped', /user navigated away before registration/.test(mainjs)],
+  ['shared esc() exposed on window.blastwa', /stampName, esc \}/.test(mainjs)],
 ];
 for (const [name, ok] of checks) {
   if (!ok) { console.log(`FAIL main.js: ${name}`); failures++; }
+}
+
+// esc hygiene: pages must alias the shared helper, never re-declare it at
+// top level. a top-level const/let/function collides on the SECOND navigation
+// because classic-script lexical globals persist for the document lifetime.
+// shallow-indent bound (0-4 chars incl. tabs): catches top-level declarations
+// written at any common style, while leaving legitimately nested consts
+// (e.g. sending.html's function-local `const esc`, indented deeper) alone;
+// actual collisions at ANY indent still fail the shared-context pass above.
+for (const page of PAGES) {
+  const pageHtml = fs.readFileSync(path.join(__dirname, 'pages', page + '.html'), 'utf8');
+  if (/^[ \t]{0,4}function esc\(/m.test(pageHtml)) {
+    console.log(`FAIL ${page}: top-level 'function esc' redeclared (use window.blastwa.esc)`);
+    failures++;
+  }
+  if (/^[ \t]{0,4}(const|let)[ \t]+esc\b/m.test(pageHtml)) {
+    console.log(`FAIL ${page}: top-level 'const/let esc' throws on second navigation`);
+    failures++;
+  }
 }
 
 console.log('');

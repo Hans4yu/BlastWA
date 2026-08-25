@@ -22,6 +22,7 @@
     </div>
     <div class="counts-bar">
       <span>Total: <b id="groups-total">0</b></span>
+      <span id="groups-cache-note" style="display:none;color:var(--text-dim)"></span>
       <button class="btn btn-sm" id="btn-export-groups">Export CSV</button>
       <button class="btn btn-sm" id="btn-export-xlsx">Export Excel (per group)</button>
       <button class="btn btn-sm" id="btn-refresh-groups">Refresh</button>
@@ -30,15 +31,14 @@
 </div>
 
 <script>
+  // shared esc() from window.blastwa (hoisted in main.js); var, not const,
+  // because scripts re-execute per navigation and top-level const would
+  // throw 'already declared' on the second visit
+  var esc = window.blastwa.esc;
+
   window.init_groups = async function () {
     const { invoke } = window.blastwa;
     const $ = (id) => document.getElementById(id);
-
-    function esc(s) {
-      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-      })[c]);
-    }
 
     function showEmpty(msg) {
       $('groups-empty').textContent = msg;
@@ -62,13 +62,71 @@
       btn.textContent = 'Grab Participants';
     }
 
+    // groups cache: one localStorage entry, { account, fetchedAt, groups }.
+    // restores instantly on tab switches so whatsapp is only hit on first
+    // load, explicit Refresh, account change or a genuinely empty store.
     const CACHE_KEY = 'blastwa.groups.cache';
 
-    function saveCache(account, groups) {
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ account, groups })); } catch (e) {}
+    function hasRows(c) {
+      return !!c && Array.isArray(c.groups) && c.groups.length > 0;
     }
-    function loadCache() {
-      try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) { return null; }
+
+    // raw read without account binding; lets saveCache see whose rows are
+    // currently stored before it decides to overwrite them
+    function readRawCache() {
+      try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); }
+      catch (e) { return null; }
+    }
+
+    // single write chokepoint for the cache slot. writer-level invariant:
+    // an empty whatsapp answer must NEVER overwrite an entry that holds
+    // non-empty rows - only an explicit user Refresh may clear stored rows.
+    // enforcing this at the write covers every fetch path that can reach
+    // saveCache, including account switches on the single slot.
+    // returns false when the write was refused.
+    function saveCache(account, groups, opts = {}) {
+      try {
+        if ((!Array.isArray(groups) || !groups.length) && !opts.explicit && hasRows(readRawCache())) {
+          return false;
+        }
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ account, fetchedAt: Date.now(), groups }));
+        return true;
+      } catch (e) { return false; }
+    }
+    function loadCache(account) {
+      const c = readRawCache();
+      if (!c || !Array.isArray(c.groups)) return null;
+      // one guard, two rejection reasons: a shapeless/legacy entry with no
+      // account field is never trusted, and neither is another account's data
+      if (!c.account || (account && c.account !== account)) return null;
+      return c;
+    }
+
+    function cacheAgeLabel(fetchedAt) {
+      if (!fetchedAt) return 'cached earlier';
+      const s = Math.max(0, Math.round((Date.now() - fetchedAt) / 1000));
+      if (s < 60) return 'cached just now';
+      const m = Math.floor(s / 60);
+      if (m < 60) return `cached ${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `cached ${h}h ago`;
+      return `cached ${Math.floor(h / 24)}d ago`;
+    }
+
+    function showCacheNote(text) {
+      const el = $('groups-cache-note');
+      el.textContent = text || '';
+      el.style.display = text ? '' : 'none';
+    }
+
+    async function resolveAccount() {
+      const accounts = await invoke('list_accounts');
+      const list = Array.isArray(accounts) ? accounts : [];
+      return (list.find((a) => a.connected) || list.find((a) => a.browser_running) || {}).name;
+    }
+
+    function fmtErr(e) {
+      return e && e.message ? e.message : String(e);
     }
 
     function renderGroups(groups) {
@@ -91,38 +149,49 @@
       });
     }
 
-    async function fetchAndRender() {
+    async function fetchAndRender(account, stale, opts = {}) {
       showEmpty('Loading groups...');
-      const accounts = await invoke('list_accounts');
-      const list = Array.isArray(accounts) ? accounts : [];
-      const account = (list.find((a) => a.connected) || list.find((a) => a.browser_running) || {}).name;
+      let res;
+      try {
+        res = await invoke('list_groups', { account });
+      } catch (e) {
+        // cdp hiccup: keep serving the last good list instead of blanking out
+        if (hasRows(stale)) {
+          renderGroups(stale.groups);
+          showCacheNote(`refresh failed · showing ${cacheAgeLabel(stale.fetchedAt)} cache (${fmtErr(e)})`);
+          return;
+        }
+        showEmpty('Failed to load groups: ' + fmtErr(e));
+        return;
+      }
+      const groups = Array.isArray(res) ? res : [];
+      // empty-answer protection lives inside saveCache (the single write
+      // chokepoint), so every fetch path gets it without its own guard here.
+      const wrote = saveCache(account, groups, opts);
+      renderGroups(groups); // empty list renders the honest per-account empty state
+      showCacheNote(!groups.length
+        ? (wrote
+          ? `whatsapp answered 0 groups · nothing cached`
+          : `whatsapp answered 0 groups · kept previously cached rows`)
+        : '');
+    }
+
+    async function refresh(opts = {}) {
+      const account = await resolveAccount();
       if (!account) {
         showEmpty('No running account. Open a browser from the Dashboard and scan the QR first.');
         return;
       }
       window.__groupsAccount = account;
 
-      let res;
-      try {
-        res = await invoke('list_groups', { account });
-      } catch (e) {
-        showEmpty('Failed to load groups: ' + (e && e.message ? e.message : e));
-        return;
-      }
-      const groups = Array.isArray(res) ? res : [];
-      saveCache(account, groups);
-      renderGroups(groups);
-    }
-
-    async function refresh() {
-      // restore instantly from cache; only hit whatsapp when empty or explicit
-      const cached = loadCache();
-      if (cached && Array.isArray(cached.groups) && cached.groups.length) {
-        window.__groupsAccount = cached.account;
+      const cached = loadCache(account);
+      if (!opts.explicit && hasRows(cached)) {
+        // instant restore on tab switches; whatsapp stays untouched
         renderGroups(cached.groups);
+        showCacheNote(`${cacheAgeLabel(cached.fetchedAt)} · ${account}`);
         return;
       }
-      await fetchAndRender();
+      await fetchAndRender(account, cached, opts);
     }
 
     $('btn-export-groups').addEventListener('click', async () => {
@@ -154,7 +223,7 @@
     });
 
     $('btn-refresh-groups').addEventListener('click', () => {
-      fetchAndRender().catch((e) => showEmpty('Refresh failed: ' + (e && e.message ? e.message : e)));
+      refresh({ explicit: true }).catch((e) => showEmpty('Refresh failed: ' + fmtErr(e)));
     });
 
     function currentGroups() {
