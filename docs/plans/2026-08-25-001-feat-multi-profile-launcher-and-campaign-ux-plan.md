@@ -174,7 +174,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U3. **Live campaign progress emission**
+- [x] U3. **Live campaign progress emission**
 
 **Goal:** Sent/Failed/Pending and the progress bar update in real time during a blast.
 
