@@ -454,7 +454,7 @@ User-approved inclusion of the remaining OKESENDER surface. These land after U1-
 each is independently shippable. WPP API support must be verified against the live
 injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incident).
 
-- [ ] U12. **Blind mode toggle**
+- [x] U12. **Blind mode toggle**
 
 **Goal:** Skip per-message status verification for maximum send speed.
 
@@ -476,7 +476,7 @@ injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incid
 
 ---
 
-- [ ] U13. **Voice note (PTT) + GIF attachments**
+- [x] U13. **Voice note (PTT) + GIF attachments**
 
 **Goal:** Attachment picker accepts audio-as-voice-note and GIFs, sent via WPP `sendFileMessage` with the correct message type.
 
@@ -592,7 +592,7 @@ injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incid
 
 ---
 
-- [ ] U18. **Number generator**
+- [x] U18. **Number generator**
 
 **Goal:** Generate candidate numbers in a prefix range for checking before blasting (OKESENDER `ButtonNumberGenerator`).
 
@@ -613,9 +613,9 @@ injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incid
 
 ---
 
-- [ ] U19. **Familiar accounts (research-first)**
+- [x] U19. **Familiar accounts (research-first)**
 
-**Goal:** Understand and replicate OKESENDER's "familiar accounts" (`BtnAddFamiliarAccount`, `FrmAdvanced`).
+**Goal:** Understand and replicate OKESENDER's "familiar accounts" (`BtnAddFamiliarAccount`, `FrmAdvanced`). RE complete: findings in `docs/plans/2026-08-25-002-research-familiar-accounts-findings.md`; go decision recorded, implementation deferred to backlog ("Engager").
 
 **Requirements:** R21
 
