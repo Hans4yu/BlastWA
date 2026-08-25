@@ -18,7 +18,9 @@ use blastwa_core::campaign::log_exporter::{
     interrupt_stale_running_records, load_campaign_records, CampaignRecord, LogEntry,
 };
 use blastwa_core::campaign::pipeline::Pipeline;
-use blastwa_core::campaign::sender::{run_campaign, CampaignConfig, ProgressEvent};
+use blastwa_core::campaign::sender::{
+    run_campaign, split_message_variants, CampaignConfig, ProgressEvent,
+};
 use blastwa_core::config::settings::{AppConfig, DataPaths};
 use blastwa_core::message::spintax;
 use blastwa_core::message::template_library::{MessageTemplate, TemplateLibrary};
@@ -348,6 +350,7 @@ async fn start_campaign(
     human_preset: Option<String>,
     attachment_path: Option<String>,
     caption: Option<String>,
+    schedule_at: Option<String>,
     ctx: State<'_, AppCtx>,
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
@@ -367,6 +370,22 @@ async fn start_campaign(
         Some("custom") => Preset::Custom,
         _ => Preset::Natural,
     };
+    let scheduled = match schedule_at.as_deref().filter(|s| !s.is_empty()) {
+        Some(raw) => {
+            // datetime-local submits "YYYY-MM-DDTHH:MM" in local wall time
+            let naive = chrono::NaiveDateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M")
+                .map_err(|_| format!("invalid schedule time: {raw}"))?;
+            let local = naive
+                .and_local_timezone(chrono::Local)
+                .single()
+                .ok_or_else(|| "invalid schedule time (ambiguous)".to_string())?;
+            if local <= chrono::Local::now() {
+                return Err("schedule time must be in the future".into());
+            }
+            Some(local)
+        }
+        None => None,
+    };
     let human = HumanBehaviorConfig {
         preset,
         delay_min_s: delay_min_s.unwrap_or(cfg.default_delay_min as f64),
@@ -378,8 +397,13 @@ async fn start_campaign(
         delay_min_s: human.delay_min_s,
         delay_max_s: human.delay_max_s,
         human,
+        schedule_at: scheduled,
         ..Default::default()
     };
+
+    // rotation: the composed body splits into variants on --- separator lines
+    let message_variants = split_message_variants(&message);
+    let variant_count = message_variants.len();
 
     // resolve attachment to bytes now (ui passes a file path)
     let attachment: Option<(Vec<u8>, String)> = match attachment_path.filter(|p| !p.is_empty()) {
@@ -442,7 +466,7 @@ async fn start_campaign(
         let _ = run_campaign(
             injector,
             &contacts,
-            &message,
+            &message_variants,
             attachment.as_ref(),
             caption.as_deref().unwrap_or(""),
             &camp_cfg,
@@ -484,7 +508,11 @@ async fn start_campaign(
         state.running.store(false, Ordering::Relaxed);
     });
 
-    Ok(serde_json::json!({ "ok": true, "queued": queued }))
+    let mut payload = serde_json::json!({ "ok": true, "queued": queued, "variants": variant_count });
+    if let Some(at) = scheduled {
+        payload["scheduled_at"] = serde_json::json!(at.format("%Y-%m-%dT%H:%M").to_string());
+    }
+    Ok(payload)
 }
 
 #[tauri::command]
@@ -712,6 +740,7 @@ async fn grab_participants(
 async fn check_numbers_cmd(
     account: String,
     ctx: State<'_, AppCtx>,
+    app: tauri::AppHandle,
 ) -> Result<Vec<CheckOutcome>, String> {
     let injector = ctx.pipeline.get_injector(&account).await.map_err(|e| e.to_string())?;
     let numbers: Vec<String> = ctx
@@ -722,9 +751,31 @@ async fn check_numbers_cmd(
         .iter()
         .map(|c| c.number.clone())
         .collect();
-    check_numbers(&injector, &numbers, |_, _, _| {})
-        .await
-        .map_err(|e| e.to_string())
+    let outcomes = check_numbers(&injector, &numbers, |checked, tot, outcome| {
+        // stream each result so the contacts page can render live
+        let _ = app.emit(
+            "check_progress",
+            serde_json::json!({
+                "checked": checked,
+                "total": tot,
+                "number": outcome.number,
+                "exists": outcome.exists,
+                "kind": outcome.kind,
+            }),
+        );
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(outcomes)
+}
+
+/// keep only the listed (checker-validated) numbers in the send list (U9)
+#[tauri::command]
+fn keep_contacts_only(valid_numbers: Vec<String>, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    let mut list = ctx.contacts.lock().unwrap();
+    list.contacts.retain(|c| valid_numbers.contains(&c.number));
+    let kept = list.len();
+    Ok(serde_json::json!({ "ok": true, "kept": kept }))
 }
 
 // ---------- autoreply ----------
@@ -1045,6 +1096,7 @@ fn main() {
             start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
+            keep_contacts_only,
             load_rules, save_rules,
             list_templates, search_templates, save_template, delete_template,
             get_logs, export_log,

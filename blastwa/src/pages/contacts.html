@@ -54,11 +54,118 @@
   </div>
 </div>
 
+<div class="panel">
+  <div class="panel-header">
+    <span>Number Checker</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body">
+    <div class="flex-between">
+      <div class="row">
+        <select id="check-account" style="width:180px"><option value="">Default</option></select>
+        <button class="btn btn-sm" id="btn-run-check">Run Check</button>
+        <button class="btn btn-sm" id="btn-keep-valid" disabled>Keep Valid Only</button>
+      </div>
+      <span id="check-summary" style="font-size:11px;color:var(--text-dim)"></span>
+    </div>
+    <div class="table-wrap" style="max-height:240px;margin-top:8px">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:30px">#</th><th>Number</th>
+            <th style="width:110px">On WhatsApp</th><th>Type</th>
+          </tr>
+        </thead>
+        <tbody id="check-body"></tbody>
+      </table>
+      <div class="empty-state" id="check-empty">Run a check against a connected account to see results here.</div>
+    </div>
+  </div>
+</div>
+
 <script>
   window.init_contacts = async function () {
-    const { invoke } = window.blastwa;
+    const { invoke, listen, addCleanup } = window.blastwa;
     await refresh();
+
+    // checker account options mirror the send page account select
+    try {
+      const accounts = await invoke('list_accounts');
+      const list = Array.isArray(accounts) ? accounts : [];
+      if (list.length) {
+        document.getElementById('check-account').innerHTML = list
+          .map((a) => `<option value="${a.name}">${a.name}</option>`)
+          .join('');
+      }
+    } catch (e) {}
+
+    let validNumbers = [];
+    const unlistenCheck = await listen('check_progress', (ev) => {
+      const p = ev.payload || ev;
+      appendCheckRow(p);
+      if (p.exists) validNumbers.push(p.number);
+      const found = validNumbers.length;
+      document.getElementById('check-summary').textContent =
+        `checked ${p.checked}/${p.total}, ${found} valid`;
+    });
+    addCleanup(unlistenCheck);
+
+    document.getElementById('btn-run-check').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-run-check');
+      validNumbers = [];
+      document.getElementById('check-body').innerHTML = '';
+      document.getElementById('check-empty').style.display = 'none';
+      document.getElementById('btn-keep-valid').disabled = true;
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+      try {
+        const outcomes = await invoke('check_numbers_cmd', {
+          account: document.getElementById('check-account').value,
+        });
+        const list = Array.isArray(outcomes) ? outcomes : [];
+        validNumbers = list.filter((o) => o.exists).map((o) => o.number);
+        document.getElementById('btn-keep-valid').disabled = !validNumbers.length;
+        document.getElementById('check-summary').textContent =
+          `done: ${validNumbers.length} of ${list.length} numbers are on whatsapp`;
+      } catch (e) {
+        document.getElementById('check-summary').textContent = '';
+        document.getElementById('check-empty').style.display = '';
+        alert('Check failed: ' + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Check';
+      }
+    });
+
+    document.getElementById('btn-keep-valid').addEventListener('click', async () => {
+      if (!validNumbers.length) return;
+      if (!confirm(`Keep only the ${validNumbers.length} valid numbers and drop the rest?`)) return;
+      try {
+        const r = await invoke('keep_contacts_only', { validNumbers });
+        alert('Send list now holds ' + ((r && r.kept) ?? 0) + ' valid contacts.');
+        await refresh();
+        document.getElementById('check-body').innerHTML = '';
+        document.getElementById('check-empty').style.display = '';
+        document.getElementById('btn-keep-valid').disabled = true;
+        document.getElementById('check-summary').textContent = '';
+      } catch (e) {
+        alert('Filter failed: ' + (e && e.message ? e.message : e));
+      }
+    });
   };
+
+  function appendCheckRow(p) {
+    const cls = p.exists ? 'badge-green' : 'badge-red';
+    document.getElementById('check-body').insertAdjacentHTML('beforeend',
+      `<tr>
+        <td>${document.getElementById('check-body').children.length + 1}</td>
+        <td class="mono">${esc(p.number)}</td>
+        <td><span class="badge ${cls}">${p.exists ? 'yes' : 'no'}</span></td>
+        <td>${esc(p.kind || '')}</td>
+      </tr>`);
+    document.getElementById('check-body').parentElement.scrollTop =
+      document.getElementById('check-body').parentElement.scrollHeight;
+  }
 
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({

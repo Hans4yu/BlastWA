@@ -64,7 +64,7 @@ pub struct CampaignStats {
 pub async fn run_campaign(
     injector: JsInjector,
     contacts: &ContactList,
-    message_template: &str,
+    message_templates: &[String],
     attachment: Option<&(Vec<u8>, String)>, // (bytes, filename)
     caption_template: &str,
     cfg: &CampaignConfig,
@@ -123,8 +123,10 @@ pub async fn run_campaign(
             break;
         }
 
-        // per-message pipeline: spintax then variables
-        let text_body = apply_variables(&spin(message_template), contact);
+        // per-message pipeline: rotate variants (contact i gets variant
+        // i mod N), then spintax then variables
+        let template = &message_templates[idx % message_templates.len()];
+        let text_body = apply_variables(&spin(template), contact);
 
         // presence simulation before sending (best-effort, never fatal)
         if engine.config().enable_typing_sim {
@@ -213,6 +215,21 @@ fn finished_stats(token: &CancellationToken) -> CampaignStats {
     }
 }
 
+/// split a composed body into rotation variants on separator lines made of
+/// three or more dashes; single message stays a one-element vec
+pub fn split_message_variants(message: &str) -> Vec<String> {
+    let normalized = message.replace("\r\n", "\n");
+    let mut variants: Vec<String> = normalized
+        .split("\n---\n")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .collect();
+    if variants.is_empty() {
+        variants.push(normalized.trim().to_string());
+    }
+    variants
+}
+
 fn guess_mime(filename: &str) -> &'static str {
     let lower = filename.to_lowercase();
     if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
@@ -262,5 +279,28 @@ mod progress_tests {
         assert_eq!(v["pending"], 3);
         assert_eq!(v["current_number"], "628123");
         assert_eq!(v["status"], "sent");
+    }
+
+    #[test]
+    fn variants_split_on_dash_separator() {
+        let msg = "halo satu\n---\nhalo dua\n\n---\nhalo tiga";
+        let v = split_message_variants(msg);
+        assert_eq!(v.len(), 3);
+        assert_eq!(v[0], "halo satu");
+        assert_eq!(v[2], "halo tiga");
+    }
+
+    #[test]
+    fn single_message_is_one_variant() {
+        assert_eq!(split_message_variants("hanya ini").len(), 1);
+        assert_eq!(split_message_variants("").len(), 1); // never empty
+    }
+
+    #[test]
+    fn crlf_separator_still_splits() {
+        let v = split_message_variants("a\r\n---\r\nb");
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0], "a");
+        assert_eq!(v[1], "b");
     }
 }

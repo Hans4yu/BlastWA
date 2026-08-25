@@ -13,7 +13,7 @@
     </div>
     <div class="panel-body">
       <div class="field">
-        <label>Message body (supports spintax {a|b} and [[firstname]] variables</label>
+        <label>Message body (supports spintax {a|b}, [[firstname]] variables; separate variants with a --- line for rotation)</label>
         <div class="fmt-toolbar" id="fmt-toolbar">
           <button type="button" class="fmt-btn fmt-bold" data-wrap="*" title="Bold">B</button>
           <button type="button" class="fmt-btn fmt-italic" data-wrap="_" title="Italic">I</button>
@@ -72,6 +72,10 @@
         <input type="checkbox" id="safe-mode" />
         <label for="safe-mode">Safe mode (verify chat exists before send)</label>
       </div>
+      <div class="field" style="margin-bottom:0;margin-top:8px">
+        <label>Schedule (optional: leave empty to send now)</label>
+        <input type="datetime-local" id="schedule-at" />
+      </div>
     </div>
   </div>
 </div>
@@ -105,14 +109,14 @@
 
 <script>
   window.init_sending = async function () {
-    const { invoke, listen } = window.blastwa;
+    const { invoke, listen, addCleanup } = window.blastwa;
     const $ = (id) => document.getElementById(id);
 
     // draft persistence: route() rebuilds this page on every navigation, so
     // the compose state lives in localStorage and is restored on init
     const DRAFT_KEY = 'blastwa.draft.sending';
     const draftFields = ['msg-body', 'caption', 'account-select', 'delay-min',
-      'delay-max', 'human-preset', 'safe-mode'];
+      'delay-max', 'human-preset', 'safe-mode', 'schedule-at'];
     let attachmentPath = null;
 
     function saveDraft() {
@@ -271,16 +275,52 @@
       }
     };
 
-    $('btn-start').onclick = () => invoke('start_campaign', {
-      message: $('msg-body').value,
-      account: $('account-select').value,
-      delayMinS: Number($('delay-min').value),
-      delayMaxS: Number($('delay-max').value),
-      humanPreset: $('human-preset').value,
-      attachmentPath: attachmentPath,
-      caption: $('caption').value || null,
-      isSafeMode: $('safe-mode').checked,
-    });
+    $('btn-start').onclick = async () => {
+      try {
+        const scheduleRaw = $('schedule-at').value;
+        const r = await invoke('start_campaign', {
+          message: $('msg-body').value,
+          account: $('account-select').value,
+          delayMinS: Number($('delay-min').value),
+          delayMaxS: Number($('delay-max').value),
+          humanPreset: $('human-preset').value,
+          attachmentPath: attachmentPath,
+          caption: $('caption').value || null,
+          isSafeMode: $('safe-mode').checked,
+          scheduleAt: scheduleRaw || null,
+        });
+        const nVariants = r && r.variants ? r.variants : 1;
+        $('current-status').textContent =
+          nVariants > 1 ? `${nVariants} message variants rotating across contacts` : '';
+        if (r && r.scheduled_at) {
+          startCountdown(r.scheduled_at);
+        }
+      } catch (e) {
+        alert('Start failed: ' + (e && e.message ? e.message : e));
+      }
+    };
+
+    // live countdown while a scheduled campaign waits for its fire time
+    let countdownTimer = null;
+    function startCountdown(localIso) {
+      const target = new Date(localIso).getTime();
+      if (Number.isNaN(target)) return;
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(() => {
+        const secs = Math.round((target - Date.now()) / 1000);
+        if (secs <= 0) {
+          clearInterval(countdownTimer);
+          countdownTimer = null;
+          $('current-status').textContent = 'scheduled campaign firing now...';
+          return;
+        }
+        const h = String(Math.floor(secs / 3600)).padStart(2, '0');
+        const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+        const s = String(secs % 60).padStart(2, '0');
+        $('current-status').textContent = `scheduled: firing in ${h}:${m}:${s} (Stop cancels)`;
+      }, 1000);
+    }
+    addCleanup(() => { if (countdownTimer) clearInterval(countdownTimer); });
 
     $('btn-stop').onclick = () => invoke('stop_campaign');
 

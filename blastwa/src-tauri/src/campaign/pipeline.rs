@@ -348,10 +348,12 @@ impl Pipeline {
         };
 
         let counters = self.state.clone();
+        // single template from the api path; the gui rotates variants upstream
+        let templates = vec![req.message.clone()];
         let result = run_campaign(
             injector,
             &contacts,
-            &req.message,
+            &templates,
             None,
             "",
             &cfg,
