@@ -206,7 +206,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U4. **Message formatting toolbar + emoji picker**
+- [x] U4. **Message formatting toolbar + emoji picker**
 
 **Goal:** OKESENDER-style Bold/Italic/Strikethrough/Monospace/Emoji buttons above the message body.
 
@@ -237,7 +237,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U5. **Settings semantics clarification**
+- [x] U5. **Settings semantics clarification**
 
 **Goal:** Make the Campaign Settings vs Settings split self-explanatory.
 
