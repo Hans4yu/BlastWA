@@ -69,6 +69,7 @@ pub async fn run_campaign(
     caption_template: &str,
     cfg: &CampaignConfig,
     token: CancellationToken,
+    paused: Arc<std::sync::atomic::AtomicBool>,
     on_progress: impl Fn(ProgressEvent),
 ) -> Result<CampaignStats> {
     // optional scheduled start
@@ -108,15 +109,19 @@ pub async fn run_campaign(
             break;
         }
 
-        // send-order jitter: shuffle within a sliding window
-        let jw = engine.jitter_window();
-        if engine.config().enable_order_jitter && idx + jw <= total {
-            let mut window: Vec<usize> = order[idx..idx + jw].to_vec();
-            engine.jitter_order(&mut window);
-            order[idx..idx + window.len()].copy_from_slice(&window);
-        }
-
+        // contacts are messaged strictly in list order (user requirement);
+        // human-mode randomization lives in the delays, not the order
         let contact = &contacts.contacts[order[idx]];
+
+        // pause: hold before this contact until resumed or stopped
+        while paused.load(std::sync::atomic::Ordering::Relaxed)
+            && !token.is_cancelled()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        }
+        if token.is_cancelled() {
+            break;
+        }
 
         // per-message pipeline: spintax then variables
         let text_body = apply_variables(&spin(message_template), contact);

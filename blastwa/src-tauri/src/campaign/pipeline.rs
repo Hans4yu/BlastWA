@@ -356,6 +356,7 @@ impl Pipeline {
             "",
             &cfg,
             token,
+            self.state.paused.clone(),
             move |progress| {
                 counters.sent.store(progress.sent, Ordering::Relaxed);
                 counters.failed.store(progress.failed, Ordering::Relaxed);

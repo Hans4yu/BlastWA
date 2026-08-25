@@ -408,3 +408,13 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
 }
 
 .badge-gray { background: #eceff1; color: #607d8b; border: 1px solid #cfd8dc; }
+
+.preview-out { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.preview-line {
+  background: #f0f7f7; border: 1px solid #d5e8e8; border-radius: 3px;
+  padding: 8px 10px; font-size: 13px; line-height: 1.45; word-break: break-word;
+}
+.preview-tag {
+  display: inline-block; background: #0e7c7b; color: #fff; font-size: 11px;
+  border-radius: 3px; padding: 1px 6px; margin-right: 8px; vertical-align: 1px;
+}

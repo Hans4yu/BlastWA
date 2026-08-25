@@ -15,6 +15,7 @@
       <div class="field">
         <label>Message body (supports spintax {a|b} and [[firstname]] variables</label>
         <textarea id="msg-body" placeholder="Hai [[firstname]]! Dapat promo {spesial|keren} nih..."></textarea>
+        <div id="preview-out" class="preview-out" style="display:none"></div>
       </div>
       <div class="field">
         <label>Attachment (image / pdf / video / audio)</label>
@@ -86,6 +87,7 @@
       <span>Sent: <b id="c-sent" class="status-sent">0</b></span>
       <span>Failed: <b id="c-failed" class="status-failed">0</b></span>
       <span>Pending: <b id="c-pending" class="status-pending">0</b></span>
+      <span id="paused-badge" class="badge badge-yellow" style="display:none">PAUSED</span>
       <span id="current-status"></span>
     </div>
   </div>
@@ -165,6 +167,49 @@
 
     restoreDraft();
 
+    // progress restore: counters live in the backend, so a tab switch never
+    // loses them; last "current number" comes from the session cache
+    function setPausedUi(isPaused) {
+      $('paused-badge').style.display = isPaused ? '' : 'none';
+      $('btn-pause').textContent = isPaused ? 'Resume' : 'Pause';
+    }
+
+    function renderCounters(sent, failed, pending) {
+      $('c-sent').textContent = sent;
+      $('c-failed').textContent = failed;
+      $('c-pending').textContent = pending;
+      const total = sent + failed + pending;
+      $('progress-fill').style.width = (total ? ((sent + failed) / total) * 100 : 0).toFixed(1) + '%';
+    }
+
+    try {
+      const st = await invoke('get_status');
+      if (st && !st.mock && (st.running || (st.total || 0) > 0)) {
+        const sent = st.sent || 0, failed = st.failed || 0;
+        const total = st.total || 0;
+        renderCounters(sent, failed, Math.max(total - sent - failed, 0));
+        setPausedUi(!!st.paused);
+        const last = sessionStorage.getItem('blastwa.campaign.last');
+        if (last) $('current-status').textContent = last;
+      }
+    } catch (e) {}
+
+    $('btn-pause').onclick = async () => {
+      try {
+        const st = await invoke('get_status');
+        if (st && st.paused) {
+          await invoke('resume_campaign');
+          setPausedUi(false);
+        } else {
+          await invoke('pause_campaign');
+          setPausedUi(true);
+          $('current-status').textContent = 'paused - press Resume to continue';
+        }
+      } catch (e) {
+        alert('Pause/Resume failed: ' + (e && e.message ? e.message : e));
+      }
+    };
+
     $('btn-start').onclick = () => invoke('start_campaign', {
       message: $('msg-body').value,
       account: $('account-select').value,
@@ -176,25 +221,45 @@
       isSafeMode: $('safe-mode').checked,
     });
 
-    $('btn-pause').onclick = () => invoke('pause_campaign');
     $('btn-stop').onclick = () => invoke('stop_campaign');
 
+    function renderWaFormat(text) {
+      const esc = String(text).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[c]);
+      return esc
+        .replace(/\*(?!\s)([^*\n]+?)(?!\s)\*/g, '<b>$1</b>')
+        .replace(/_(?!\s)([^_\n]+?)(?!\s)_/g, '<i>$1</i>')
+        .replace(/~(?!\s)([^~\n]+?)(?!\s)~/g, '<s>$1</s>')
+        .replace(/```([^`]+?)```/g, '<code>$1</code>');
+    }
+
     $('btn-preview-spintax').onclick = async () => {
-      const r = await invoke('preview_spintax', { text: $('msg-body').value });
-      const previews = Array.isArray(r) ? r : (r.previews || []);
-      alert(previews.map((p, i) => `${i + 1}. ${p}`).join('\n') || 'no preview available');
+      const out = $('preview-out');
+      try {
+        const r = await invoke('preview_spintax', { text: $('msg-body').value });
+        const previews = Array.isArray(r) ? r : (r.previews || []);
+        if (!previews.length) {
+          out.style.display = '';
+          out.innerHTML = '<div class="preview-line">No contacts loaded - add contacts to see variable examples.</div>';
+          return;
+        }
+        out.style.display = '';
+        out.innerHTML = previews
+          .map((p, i) => `<div class="preview-line"><span class="preview-tag">contact ${i + 1}</span>${renderWaFormat(p)}</div>`)
+          .join('');
+      } catch (e) {
+        out.style.display = '';
+        out.innerHTML = `<div class="preview-line">Preview failed: ${esc(e && e.message ? e.message : e)}</div>`;
+      }
     };
 
     await listen('campaign_progress', (ev) => {
       const p = ev.payload || ev;
-      $('c-sent').textContent = p.sent ?? 0;
-      $('c-failed').textContent = p.failed ?? 0;
-      $('c-pending').textContent = p.pending ?? 0;
-      const total = (p.sent ?? 0) + (p.failed ?? 0) + (p.pending ?? 0);
-      const pct = total ? (((p.sent ?? 0) + (p.failed ?? 0)) / total) * 100 : 0;
-      $('progress-fill').style.width = pct.toFixed(1) + '%';
-      $('current-status').textContent = p.current_number
-        ? `last: ${p.current_number} (${p.status})` : '';
+      renderCounters(p.sent ?? 0, p.failed ?? 0, p.pending ?? 0);
+      const line = p.current_number ? `last: ${p.current_number} (${p.status})` : '';
+      $('current-status').textContent = line;
+      try { sessionStorage.setItem('blastwa.campaign.last', line); } catch (e) {}
     });
   };
 </script>

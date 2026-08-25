@@ -400,8 +400,10 @@ async fn start_campaign(
 
     let state = ctx.state.clone();
     state.running.store(true, Ordering::Relaxed);
+    state.paused.store(false, Ordering::Relaxed);
     state.sent.store(0, Ordering::Relaxed);
     state.failed.store(0, Ordering::Relaxed);
+    state.total.store(contacts.len() as u32, Ordering::Relaxed);
 
     let token = {
         let mut guard = state.stop_flag.lock().await;
@@ -424,6 +426,7 @@ async fn start_campaign(
             caption.as_deref().unwrap_or(""),
             &camp_cfg,
             token,
+            state.paused.clone(),
             move |p: ProgressEvent| {
                 counters.sent.store(p.sent, Ordering::Relaxed);
                 counters.failed.store(p.failed, Ordering::Relaxed);
@@ -447,9 +450,15 @@ async fn start_campaign(
 }
 
 #[tauri::command]
-async fn pause_campaign() -> Result<serde_json::Value, String> {
-    // pause == stop for v0.2; resume re-queues remaining contacts later
-    Ok(serde_json::json!({ "ok": true, "note": "use stop" }))
+async fn pause_campaign(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    ctx.state.paused.store(true, Ordering::Relaxed);
+    Ok(serde_json::json!({ "ok": true, "paused": true }))
+}
+
+#[tauri::command]
+async fn resume_campaign(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    ctx.state.paused.store(false, Ordering::Relaxed);
+    Ok(serde_json::json!({ "ok": true, "paused": false }))
 }
 
 #[tauri::command]
@@ -462,8 +471,10 @@ async fn stop_campaign(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, Stri
 async fn get_status(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
         "running": ctx.state.running.load(Ordering::Relaxed),
+        "paused": ctx.state.paused.load(Ordering::Relaxed),
         "sent": ctx.state.sent.load(Ordering::Relaxed),
         "failed": ctx.state.failed.load(Ordering::Relaxed),
+        "total": ctx.state.total.load(Ordering::Relaxed),
     }))
 }
 
@@ -784,8 +795,24 @@ fn save_config(
 }
 
 #[tauri::command]
-fn preview_spintax(text: String) -> Result<Vec<String>, String> {
-    Ok(spintax::preview_spins(&text, 3))
+fn preview_spintax(
+    text: String,
+    ctx: State<'_, AppCtx>,
+) -> Result<Vec<String>, String> {
+    // render against the first contacts so [[firstname]] etc. show real
+    // sample values; falls back to spintax-only when the list is empty
+    let samples = ctx.contacts.lock().unwrap();
+    if samples.contacts.is_empty() {
+        return Ok(spintax::preview_spins(&text, 3));
+    }
+    let mut out = Vec::new();
+    for c in samples.contacts.iter().take(3) {
+        out.push(blastwa_core::message::variables::apply_variables(
+            &spintax::spin(&text),
+            c,
+        ));
+    }
+    Ok(out)
 }
 
 #[tauri::command]
@@ -824,8 +851,10 @@ fn main() {
     let (tx, rx) = tokio::sync::mpsc::channel::<server::BlastRequest>(16);
     let state = AppState {
         running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        paused: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         sent: Arc::new(std::sync::atomic::AtomicU32::new(0)),
         failed: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+        total: Arc::new(std::sync::atomic::AtomicU32::new(0)),
         blast_requested: Arc::new(tx),
         stop_flag: Arc::new(tokio::sync::Mutex::new(
             tokio_util::sync::CancellationToken::new(),
@@ -869,7 +898,7 @@ fn main() {
         .manage(ctx)
         .invoke_handler(tauri::generate_handler![
             list_accounts, add_account, remove_account, open_browser,
-            start_campaign, pause_campaign, stop_campaign, get_status,
+            start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
             load_rules, save_rules,

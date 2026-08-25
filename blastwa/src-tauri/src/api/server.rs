@@ -17,8 +17,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub running: Arc<AtomicBool>,
+    pub paused: Arc<AtomicBool>,
     pub sent: Arc<std::sync::atomic::AtomicU32>,
     pub failed: Arc<std::sync::atomic::AtomicU32>,
+    /// contacts queued for the current campaign (for pending restore)
+    pub total: Arc<std::sync::atomic::AtomicU32>,
     /// set by the gui layer: triggers campaign start through the normal pipeline
     pub blast_requested: Arc<tokio::sync::mpsc::Sender<BlastRequest>>,
     /// current campaign cancel token; overwritten at each campaign start
