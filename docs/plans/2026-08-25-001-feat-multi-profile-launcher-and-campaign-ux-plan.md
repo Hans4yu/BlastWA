@@ -37,6 +37,10 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 - R7. Campaign Settings and the Settings page are visually/verbally distinguished (per-run vs app-level).
 - R8. Campaign logs persist to disk per profile: after an app restart, past campaigns are viewable with date and sent/failed counts (OKESENDER "Sent Campaigns" parity).
 - R9. Export filenames auto-include a timestamp (`blastwa-groups-2026-08-25-1442.csv`) so exports never overwrite each other and never need manual renaming.
+- R10. A campaign can carry multiple message variants rotated across contacts (contact i gets variant i mod N), each variant still running through spintax + variables + Human Mode.
+- R11. The number checker's valid results can be imported into the contact list in one click (filter-then-blast flow).
+- R12. Pause actually suspends the send loop and Resume continues it, with a visible PAUSED state (audit + fix of the existing buttons).
+- R13. A campaign can be scheduled for a future time, with a visible countdown and the ability to cancel before it fires.
 
 ---
 
@@ -311,6 +315,131 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
+- [ ] U8. **Multiple message rotation**
+
+**Goal:** Compose N message variants; contact i receives variant i mod N (then spintax + variables + Human Mode apply per send).
+
+**Requirements:** R10
+
+**Dependencies:** None (composes on top of U3's progress events naturally)
+
+**Files:**
+- Modify: `src/pages/sending.html` (variant tabs / "Add message" in the Message panel)
+- Modify: `src-tauri/src/main.rs` (`start_campaign` accepts `messages: Vec<String>`)
+- Modify: `src-tauri/src/campaign/pipeline.rs` + `src-tauri/src/campaign/sender.rs` (rotation at send time)
+- Test: `src-tauri/src/campaign/sender.rs` (inline tests)
+
+**Approach:**
+- UI: first variant is the existing textarea; "+ Add message" adds variant textareas with remove buttons; draft persistence keys per variant index.
+- IPC: `messages: Option<Vec<String>>` — empty/missing falls back to the single `message` field (backward compatible with the REST API).
+- Sender: variant index = contact index mod variants.len(), resolved before spintax so each variant spins independently.
+
+**Patterns to follow:**
+- Existing draft persistence and spintax/variables pipeline.
+
+**Test scenarios:**
+- Happy path: 2 variants, 5 contacts → contacts 1/3/5 get variant A, 2/4 get variant B (verify via log).
+- Edge case: one variant only → identical behavior to today.
+- Edge case: a variant left empty → treated as absent; rotation skips it (min 1 variant enforced).
+- Happy path: spintax resolves independently inside each variant.
+
+**Verification:**
+- Blast to test contacts with 2 variants; received messages alternate and spin correctly.
+
+---
+
+- [ ] U9. **Checker → import valid numbers**
+
+**Goal:** Filter-then-blast flow: check numbers, then import only the valid ones into the contact list in one click.
+
+**Requirements:** R11
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src/pages/contacts.html` (Check Numbers panel: input/list, results table, "Import valid" button)
+- Modify: `src-tauri/src/main.rs` (expose checker results + `import_valid_contacts` command if not reachable)
+- Modify: `src-tauri/src/campaign/checker.rs` (return structured valid/invalid results if it does not already)
+
+**Approach:**
+- Panel on the Contacts page: paste numbers or use the current list → run checker against the connected account → results table (number, valid/invalid, error) → "Import valid to list" appends them as contacts.
+- Reuses the existing checker engine and the LID/number normalization already in the codebase.
+
+**Patterns to follow:**
+- Existing contacts table rendering + import flow; existing checker command wiring.
+
+**Test scenarios:**
+- Happy path: 5 numbers (3 real) → checker marks 3 valid → import adds exactly 3 contacts.
+- Edge case: checker run with no connected account → clear error, no partial import.
+- Edge case: duplicates between results and existing contacts → dedupe respects the Remove-duplicates checkbox.
+
+**Verification:**
+- Check a mixed list, import valid-only, see the contact count match the valid count.
+
+---
+
+- [ ] U10. **Pause/Resume audit and fix**
+
+**Goal:** Pause suspends the send loop mid-campaign; Resume continues it; UI shows a PAUSED state.
+
+**Requirements:** R12
+
+**Dependencies:** U3 (progress events carry the paused state)
+
+**Files:**
+- Modify: `src-tauri/src/campaign/sender.rs` (pause flag checked between sends)
+- Modify: `src-tauri/src/app_state.rs` or `src-tauri/src/api/server.rs` (paused flag on state)
+- Modify: `src-tauri/src/main.rs` (`pause_campaign` / `resume_campaign` semantics)
+- Modify: `src/pages/sending.html` (Pause toggles to Resume, PAUSED badge in the progress panel)
+
+**Approach:**
+- Audit first: confirm what `pause_campaign` does today; if it is a disguised stop, add a `paused: Arc<AtomicBool>` checked at the top of each send iteration (sleep-wait while paused, stop flag still honored).
+- Progress events include `paused: true` so the badge renders; Resume emits the next regular event.
+
+**Patterns to follow:**
+- Existing `stop_flag` CancellationToken pattern.
+
+**Test scenarios:**
+- Happy path: pause mid-campaign → no sends occur while paused (log gap), resume → sends continue from the next pending contact.
+- Edge case: pause then Stop → campaign stops cleanly from the paused state.
+- Edge case: pause with 0 pending → no-op, state stays consistent.
+
+**Verification:**
+- Manual blast with a pause in the middle; received-message timestamps show the gap and clean continuation.
+
+---
+
+- [ ] U11. **Schedule send**
+
+**Goal:** Queue a campaign to start at a chosen time, with a live countdown and cancel-before-fire.
+
+**Requirements:** R13
+
+**Dependencies:** U3 (progress panel hosts the countdown), U10 (stop semantics reused for cancel)
+
+**Files:**
+- Modify: `src/pages/sending.html` (Schedule control + countdown display)
+- Modify: `src-tauri/src/main.rs` (`start_campaign` gains `schedule_at: Option<String>`; scheduled state + cancel)
+- Modify: `src-tauri/src/campaign/pipeline.rs` (delayed dispatch through the existing blast channel)
+
+**Approach:**
+- UI: "Send Now" stays; a datetime-local input + "Schedule" button arms the campaign; the progress panel shows a countdown and a Cancel button; the compose draft stays editable until fire.
+- Backend: schedule spawns a tokio task sleeping until the target time (woken early by cancel), then pushes the normal BlastRequest; app restart drops the schedule (documented v1 limitation, consistent with in-memory session state).
+
+**Patterns to follow:**
+- Existing `stop_flag` cancellation; existing progress event shape (add a `scheduled`/`countdown` status value).
+
+**Test scenarios:**
+- Happy path: schedule 2 minutes ahead → countdown renders → campaign fires on time and progresses normally.
+- Edge case: cancel before fire → no blast request is pushed, UI returns to idle.
+- Edge case: schedule time in the past → rejected with a clear error at arm time.
+- Error path: account disconnected by fire time → the campaign fails with the standard login error path.
+
+**Verification:**
+- Schedule a 1-minute-out campaign to a test number; observe countdown, auto-fire, and normal completion.
+
+---
+
 ## Backlog (OKESENDER parity, intentionally deferred)
 
 Reverse-engineered OKESENDER features NOT in this plan's scope, tracked for future plans:
@@ -318,7 +447,6 @@ Reverse-engineered OKESENDER features NOT in this plan's scope, tracked for futu
 - Interactive buttons / list messages (`WAPI.sendButtons`, `sendListMenu`) — needs WPP support checks
 - Catalog builder, Multi-channel send, Engager module
 - Sending modes: Blind mode (no status tracking), Multi-channel
-- Schedule send, multiple-message rotation per campaign
 - Numbers filter/generator enhancements beyond the existing checker
 - Voice note (PTT) + GIF attachments
 
