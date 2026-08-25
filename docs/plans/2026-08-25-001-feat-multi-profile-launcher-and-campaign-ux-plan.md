@@ -41,6 +41,14 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 - R11. The number checker's valid results can be imported into the contact list in one click (filter-then-blast flow).
 - R12. Pause actually suspends the send loop and Resume continues it, with a visible PAUSED state (audit + fix of the existing buttons).
 - R13. A campaign can be scheduled for a future time, with a visible countdown and the ability to cancel before it fires.
+- R14. Blind mode: skip delivery-status verification for speed (no status in logs).
+- R15. Audio attachments can be sent as voice notes (PTT); GIFs render animated.
+- R16. The account's WhatsApp phonebook can be imported into the contact list with selection.
+- R17. Messages with interactive buttons or a list menu can be composed and sent (WPP capability permitting).
+- R18. Catalog-style messages (title, description, items) can be built, saved, and sent.
+- R19. One campaign can fan out across multiple connected accounts without duplicates.
+- R20. Candidate numbers can be generated from a prefix range and fed into the checker.
+- R21. OKESENDER "familiar accounts" semantics are researched and a go/no-go decision recorded.
 
 ---
 
@@ -440,15 +448,196 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-## Backlog (OKESENDER parity, intentionally deferred)
+## Phase 3 - Full OKESENDER Parity (U12-U19)
 
-Reverse-engineered OKESENDER features NOT in this plan's scope, tracked for future plans:
+User-approved inclusion of the remaining OKESENDER surface. These land after U1-U11;
+each is independently shippable. WPP API support must be verified against the live
+injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incident).
 
-- Interactive buttons / list messages (`WAPI.sendButtons`, `sendListMenu`) — needs WPP support checks
-- Catalog builder, Multi-channel send, Engager module
-- Sending modes: Blind mode (no status tracking), Multi-channel
-- Numbers filter/generator enhancements beyond the existing checker
-- Voice note (PTT) + GIF attachments
+- [ ] U12. **Blind mode toggle**
+
+**Goal:** Skip per-message status verification for maximum send speed.
+
+**Requirements:** R14
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src/pages/sending.html` (mode select: Safe / Blind)
+- Modify: `src-tauri/src/campaign/sender.rs` (blind path skips the chat-exists check and does not wait for send confirmation)
+
+**Approach:** one mode selector next to Safe mode; blind mode logs sends without delivery status. OKESENDER semantics: "will send to all contacts, valid or invalid; blind mode will not show the status of the message."
+
+**Test scenarios:**
+- Happy path: blind blast completes faster than safe blast on the same list.
+- Edge case: blind mode still respects pause/stop and human-mode delays.
+
+**Verification:** timing comparison on a small list; no status column in blind logs.
+
+---
+
+- [ ] U13. **Voice note (PTT) + GIF attachments**
+
+**Goal:** Attachment picker accepts audio-as-voice-note and GIFs, sent via WPP `sendFileMessage` with the correct message type.
+
+**Requirements:** R15
+
+**Dependencies:** U4 (attachment picker exists)
+
+**Files:**
+- Modify: `src/pages/sending.html` (accept filters + send-as-voice toggle for audio)
+- Modify: `src-tauri/src/campaign/sender.rs` and attachment plumbing (ptt flag, gif detection)
+
+**Approach:** audio files gain a "send as voice note" checkbox (PTT flag); `.gif` files route to the gif message type. Caption rules follow WhatsApp's own constraints.
+
+**Test scenarios:**
+- Happy path: mp3 sent as PTT renders as a playable voice note.
+- Happy path: gif renders animated in the chat.
+- Error path: unsupported file triggers a clear alert before any send.
+
+**Verification:** manual send of both types to a test number.
+
+---
+
+- [ ] U14. **Import contacts from WhatsApp phonebook**
+
+**Goal:** Pull the account's saved contacts into the blast list.
+
+**Requirements:** R16
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src-tauri/src/browser/js_injector.rs` (contact store read via WPP/Store)
+- Modify: `src-tauri/src/main.rs` (`list_wa_contacts` + `import_wa_contacts` commands)
+- Modify: `src/pages/contacts.html` ("Import from WhatsApp" button + selection table)
+
+**Approach:** read the contact store (name + number), present a selectable table, import the checked ones through the normal contact pipeline (dedupe respected).
+
+**Test scenarios:**
+- Happy path: import 3 checked contacts, they appear in the list with names.
+- Edge case: contacts without numbers are skipped.
+
+**Verification:** import on the live account; count matches selection.
+
+---
+
+- [ ] U15. **Interactive buttons + list messages**
+
+**Goal:** Send messages with interactive reply buttons or a list menu (OKESENDER `FrmInteactiveButtonsBuilder`, `WAPI.sendButtons`, `sendListMenu`).
+
+**Requirements:** R17
+
+**Dependencies:** U8 (message composition surface)
+
+**Files:**
+- Modify: `src/pages/sending.html` (interactive builder inside the compose panel)
+- Modify: `src-tauri/src/browser/js_injector.rs` (`send_buttons`, `send_list_menu` via WPP equivalents)
+- Modify: `src-tauri/src/campaign/sender.rs` (message type dispatch: text | buttons | list)
+
+**Approach:** builder UI produces a JSON action payload stored with the campaign; sender picks the WPP call per type. **First step of the unit: capability probe** - verify the injected WPP bundle exposes the needed calls; if absent, surface a clear "not supported by current WPP build" error instead of shipping broken sends.
+
+**Test scenarios:**
+- Happy path: button message renders with clickable buttons in the receiving chat.
+- Error path: WPP lacks the API, compose shows the capability warning at build time, send refuses cleanly.
+
+**Verification:** manual send to a test number; buttons clickable and reply received.
+
+---
+
+- [ ] U16. **Catalog message builder**
+
+**Goal:** Build and send catalog-style messages (OKESENDER `FrmCatalogBuilder`: title, description, items with thumbnails).
+
+**Requirements:** R18
+
+**Dependencies:** U15 (same message-type dispatch infrastructure)
+
+**Files:**
+- Modify: `src/pages/sending.html` (catalog editor panel or modal)
+- Modify: `src-tauri/src/campaign/sender.rs` (catalog message type)
+- Modify: `src-tauri/src/message/template_library.rs` (persist catalogs as templates)
+
+**Approach:** catalogs saved as reusable JSON templates (`catalog_*.json` naming mirrors OKESENDER); send path uses the WPP catalog/product message API if available - same capability-probe rule as U15.
+
+**Test scenarios:**
+- Happy path: 2-item catalog renders as a product list message.
+- Edge case: catalog with no items refuses to send.
+
+**Verification:** manual send; items visible in the receiving chat.
+
+---
+
+- [ ] U17. **Multi-channel send**
+
+**Goal:** One campaign distributed across several connected accounts (round-robin or split), multiplying daily volume.
+
+**Requirements:** R19
+
+**Dependencies:** U1-U2 (profiles are separate processes, so this operates on accounts within ONE window)
+
+**Files:**
+- Modify: `src/pages/sending.html` (account multi-select in Campaign Settings)
+- Modify: `src-tauri/src/campaign/pipeline.rs` (campaign fan-out across accounts)
+- Modify: `src-tauri/src/campaign/sender.rs` (per-account worker consuming a shared contact queue)
+
+**Approach:** selected accounts each get a worker pulling from one shared queue; per-account progress events tagged with the account name; stop/pause affect all workers. Accounts must be CONNECTED to join the pool.
+
+**Test scenarios:**
+- Happy path: 20 contacts across 2 accounts, each account sends ~10, no duplicates.
+- Edge case: one account disconnects mid-run, its share re-routes or fails visibly, the other continues.
+- Edge case: all selected accounts must be connected at start, else reject.
+
+**Verification:** two connected accounts, one campaign, both chats show sends, counters sum correctly.
+
+---
+
+- [ ] U18. **Number generator**
+
+**Goal:** Generate candidate numbers in a prefix range for checking before blasting (OKESENDER `ButtonNumberGenerator`).
+
+**Requirements:** R20
+
+**Dependencies:** U9 (checker flow consumes the output)
+
+**Files:**
+- Modify: `src/pages/contacts.html` (generator panel: prefix + range + cap)
+
+**Approach:** generate numeric suffixes under a prefix (e.g. 62812 + 0000-0099), cap the count, feed straight into the checker panel - never directly into the send list.
+
+**Test scenarios:**
+- Happy path: prefix 62812, range 0-99, produces 100 candidates in the checker input.
+- Edge case: range cap enforced (no runaway generation).
+
+**Verification:** generate, check, import valid - end to end.
+
+---
+
+- [ ] U19. **Familiar accounts (research-first)**
+
+**Goal:** Understand and replicate OKESENDER's "familiar accounts" (`BtnAddFamiliarAccount`, `FrmAdvanced`).
+
+**Requirements:** R21
+
+**Dependencies:** None
+
+**Files:**
+- Create: `docs/plans/` research note (deep RE of FrmAdvanced logic and its WAPI calls)
+- Modify: TBD by findings
+
+**Approach:** OKESENDER gates this behind licensing and its semantics are not obvious from strings alone. This unit starts with a dedicated RE pass (decompile FrmAdvanced, trace its WAPI calls); implementation scope is decided from the findings. If it turns out to be license-server noise, the unit closes with that conclusion.
+
+**Test scenarios:**
+- Test expectation: none - research unit; outcome is a go/no-go follow-up.
+
+**Verification:** a written RE conclusion and go/no-go decision.
+
+---
+
+## Backlog (remaining, intentionally deferred)
+
+- Check for Update flow (BlastWA has its own WPP updater already; app self-update deferred)
+- Received-message export (requires inbound message observation - candidate for the Engager research)
 
 ---
 
