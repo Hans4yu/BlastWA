@@ -210,7 +210,7 @@ impl JsInjector {
                 try {{
                     if ({is_safe}) {{
                         var exists = await WPP.number.queryExists('{id}');
-                        if (!exists || !exists.exists) return {{ sentStatus: false, error: "chat not found" }};
+                        if (!exists) return {{ sentStatus: false, error: "chat not found" }};
                     }}
                     var r = await WPP.chat.sendTextMessage('{id}', '{msg}');
                     return {{ sentStatus: true, result: r || null }};
@@ -260,7 +260,7 @@ impl JsInjector {
                 try {{
                     if ({is_safe}) {{
                         var exists = await WPP.number.queryExists('{id}');
-                        if (!exists || !exists.exists) return {{ sentStatus: false, error: "chat not found" }};
+                        if (!exists) return {{ sentStatus: false, error: "chat not found" }};
                     }}
                     await WPP.chat.sendFileMessage('{id}', '{b64}', getFileOpts('{fn}'));
                     return {{ sentStatus: true }};
@@ -304,11 +304,14 @@ impl JsInjector {
         let script = format!(
             r#"(async () => {{
                 try {{
+                    // wa-js v4.6: queryExists returns an object (wid, biz, lid...)
+                    // on hit, null when the number has no whatsapp account. there
+                    // is no `.exists` field anymore (older bundles had one).
                     var r = await WPP.number.queryExists('{n}@c.us');
                     return {{
                         numtoCheck: '{n}',
-                        exists: !!(r && r.exists),
-                        canReceiveMessage: !!(r && r.exists),
+                        exists: !!r,
+                        canReceiveMessage: !!r,
                         isBusiness: !!(r && r.business),
                         wid: r ? String(r.wid || '') : ''
                     }};
