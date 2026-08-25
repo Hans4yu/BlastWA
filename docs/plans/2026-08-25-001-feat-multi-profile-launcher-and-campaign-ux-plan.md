@@ -1,0 +1,351 @@
+---
+title: "feat: Multi-Profile Launcher, Live Campaign Progress, Formatting Toolbar"
+type: feat
+status: active
+date: 2026-08-25
+---
+
+# Multi-Profile Launcher, Live Campaign Progress, Formatting Toolbar
+
+## Overview
+
+Four user-facing gaps in BlastWA close here:
+
+1. **Multi-profile launcher (OKESENDER parity)** — run account A's campaign and account B's campaign at the same time by opening a second BlastWA window bound to a different profile. Each profile is a fully isolated instance: own accounts, contacts, templates, settings, logs, API port. Chosen architecture: profile launcher (option A), matching OKESENDER's launcher principle.
+2. **Live campaign progress** — the Send Campaign page's Sent/Failed/Pending counters never move because the backend never emits `campaign_progress`; the sender already has an `on_progress` callback hook that the GUI layer never wired to a Tauri event.
+3. **Message formatting toolbar** — Bold / Italic / Strikethrough / Monospace / Emoji buttons above the message body, matching OKESENDER's compose toolbar.
+4. **Settings semantics clarification** — Campaign Settings (per-run: account, delays, preset, safe mode) vs the Settings page (app-level: chrome path, API, WPP) get explicit labeling so the split is obvious.
+
+---
+
+## Problem Frame
+
+The app currently behaves as a single global instance: one contact list, one running campaign at a time (`AppState.running` is a single `AtomicBool`), one settings file. The user runs multiple WhatsApp accounts and wants OKESENDER-style parallelism: launch a second app window bound to a different profile and blast from both simultaneously.
+
+Independently, the campaign progress UI is dead (frontend listens for `campaign_progress`, backend never emits it), the compose box lacks the formatting toolbar OKESENDER has, and the split between "Campaign Settings" and the "Settings" page is unlabeled and confusing.
+
+---
+
+## Requirements Trace
+
+- R1. `blastwa.exe --profile <name>` runs a fully isolated instance: own data dir, accounts, contacts, templates, settings, logs, API port.
+- R2. Default run (no flag) behaves exactly as today (data in `%APPDATA%\BlastWA`).
+- R3. From inside any window, the user can open a new window bound to a new or existing profile (File menu).
+- R4. API port conflicts between profiles are avoided automatically (auto-pick free port when the configured one is taken).
+- R5. While a campaign runs, Sent/Failed/Pending counters and the progress bar update live (per send, not on completion).
+- R6. Message body toolbar inserts WhatsApp formatting (`*bold*`, `_italic_`, `~strike~`, `` ```mono``` ``) around the current selection and inserts emoji at the cursor.
+- R7. Campaign Settings and the Settings page are visually/verbally distinguished (per-run vs app-level).
+- R8. Campaign logs persist to disk per profile: after an app restart, past campaigns are viewable with date and sent/failed counts (OKESENDER "Sent Campaigns" parity).
+- R9. Export filenames auto-include a timestamp (`blastwa-groups-2026-08-25-1442.csv`) so exports never overwrite each other and never need manual renaming.
+
+---
+
+## Scope Boundaries
+
+- No per-account campaigns inside one window (option B) — parallelism comes from multiple profile windows.
+- No cross-profile contact/template sharing.
+- No changes to CDP architecture, Chrome isolation, or account persistence format.
+- No license checks (unchanged principle).
+- Excel per-sheet group export already shipped — untouched.
+
+---
+
+## Context & Research
+
+### Relevant Code and Patterns
+
+- `src-tauri/src/config/settings.rs` — `AppConfig::app_dir()` is the single data-root resolver; every storage path derives from it. Profile-awareness lands here.
+- `src-tauri/src/main.rs` — `main()` / tauri Builder; CLI arg parsing goes here; window title set in `src-tauri/tauri.conf.json`.
+- `src-tauri/src/api/server.rs` — `AppState`, `start_server(api_port)`; port auto-pick on bind failure.
+- `src-tauri/src/campaign/sender.rs` — `on_progress: impl Fn(ProgressEvent)` hook exists; `ProgressEvent { sent, failed, pending, current_number, status }`.
+- `src-tauri/src/main.rs` `start_campaign` — spawns the pipeline; the emit closure wires in here.
+- `src/pages/sending.html` — `listen('campaign_progress')` already correct on the frontend; compose toolbar goes here.
+- `src/pages/settings.html` — app-level settings live here.
+- `src/main.js` — menubar (File menu) definition for the "New Window (Profile)" action.
+
+### Institutional Learnings
+
+- Tauri v2: `window.__TAURI__` requires `withGlobalTauri` (already enabled); dialog plugin already installed with `dialog:default` capability — the save dialog for exports is a working pattern to copy.
+- Frontend assets are embedded at Rust build time — frontend edits require `cargo build --features gui`, not just a refresh.
+- innerHTML-injected page scripts need the router's re-execution lifecycle (already in place; new pages/controls just work).
+- Concurrent multi-MB CDP evaluates reset the websocket — chunked WPP injection exists; do not reintroduce single-shot large evaluates.
+
+---
+
+## Key Technical Decisions
+
+- **Profile = isolated data root**: `--profile <name>` resolves the app dir to `%APPDATA%\BlastWA\profiles\<name>`; everything under the existing `app_dir()` automatically isolates (accounts.json, Profiles/, accounts/, templates/, Data/, Reports/, wpp/). No storage format changes.
+- **Profile passed via env + CLI**: main() parses `--profile <name>` and sets the resolved dir before any config load; also accept `BLASTWA_PROFILE` env for launcher convenience.
+- **API port per profile**: each profile's `config.json` keeps its own `api_port`; on bind failure the server walks up to the next free port and persists the choice.
+- **Progress emission via existing hook**: pass an `on_progress` closure into the pipeline call from `start_campaign` that does `app_handle.emit("campaign_progress", payload)` — no new event system.
+- **Toolbar is plain text insertion**: WhatsApp formatting is literal characters (`*`, `_`, `~`, backticks) around `textarea.selectionStart/End`; emoji picker is a fixed grid of common emojis inserted at the cursor. No rich-text editor.
+
+---
+
+## Open Questions
+
+### Resolved During Planning
+
+- Architecture fork (launcher vs in-window multi-campaign): user chose the profile launcher (option A).
+- Where profile windows come from: File menu action spawning a detached `blastwa.exe --profile <name>` process (no separate launcher binary needed).
+
+### Deferred to Implementation
+
+- Exact sanitize rules for profile directory names (must be filesystem-safe on Windows).
+- Whether the profile picker in the File menu should list existing profiles from disk scan of `profiles/` (likely yes — cheap readdir).
+
+---
+
+## Implementation Units
+
+- [ ] U1. **Profile-aware data root**
+
+**Goal:** `--profile <name>` isolates all app data under `profiles/<name>/`.
+
+**Requirements:** R1, R2
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src-tauri/src/config/settings.rs`
+- Modify: `src-tauri/src/main.rs`
+- Test: `src-tauri/src/config/settings.rs` (inline tests)
+
+**Approach:**
+- `AppConfig` gains a profile field (or a process-global set once in main before any config load).
+- `app_dir()` returns `%APPDATA%\BlastWA` when no profile, `%APPDATA%\BlastWA\profiles\<name>` otherwise.
+- Window title gains a `Profile: <name>` suffix when a profile is active (default profile stays untitled).
+
+**Patterns to follow:**
+- Existing `AppConfig::app_dir()` call sites — none of them should need changes.
+
+**Test scenarios:**
+- Happy path: no flag → app_dir is the classic root (existing behavior, existing tests stay green).
+- Happy path: profile "work" → app_dir ends with `profiles/work`.
+- Edge case: profile name with path separators/illegal chars → sanitized to a safe single directory segment.
+
+**Verification:**
+- Launching with `--profile work` creates `profiles/work` on first save and never touches the root data dir.
+
+---
+
+- [ ] U2. **Profile launcher + per-profile API port**
+
+**Goal:** Open additional BlastWA windows bound to profiles from the File menu; API ports never collide between profiles.
+
+**Requirements:** R3, R4
+
+**Dependencies:** U1
+
+**Files:**
+- Modify: `src/main.js` (File menu item)
+- Modify: `src-tauri/src/main.rs` (spawn command + api port fallback)
+- Modify: `src-tauri/src/api/server.rs` (port walk + persist)
+- Modify: `src/pages/settings.html` (show effective profile + api port, read-only)
+
+**Approach:**
+- Tauri command `open_profile_window(profile: String)`: validates/sanitizes the name, spawns the current exe detached with `--profile <name>` (`std::process::Command` with creation flags for detached on Windows).
+- File menu gains "New Window (Profile...)" → JS prompt (or dialog) for the name → invoke.
+- `start_server`: try configured port; on bind error, walk +1 until free; persist the effective port back to the profile's config.
+
+**Patterns to follow:**
+- Existing menubar wiring in `src/main.js`; existing dialog plugin usage for prompts if a native picker is preferred.
+
+**Test scenarios:**
+- Happy path: File → New Window (Profile "b") → second window opens with `Profile: b` in the title and its own empty accounts table.
+- Edge case: opening a profile that already exists reuses its data (accounts persisted under that profile reappear).
+- Error path: default API port taken by profile A → profile B's server lands on 8766+ and the Settings page shows it.
+- Integration: campaign running in window A does not block a campaign in window B (separate processes).
+
+**Verification:**
+- Two windows, two profiles, two simultaneous campaigns, no port errors in either log.
+
+---
+
+- [ ] U3. **Live campaign progress emission**
+
+**Goal:** Sent/Failed/Pending and the progress bar update in real time during a blast.
+
+**Requirements:** R5
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src-tauri/src/main.rs` (`start_campaign` wiring)
+- Modify: `src-tauri/src/campaign/pipeline.rs` (thread the callback through if not already exposed)
+- Modify: `src-tauri/src/campaign/sender.rs` (only if the hook signature needs an emit-friendly shape)
+
+**Approach:**
+- `start_campaign` builds an `on_progress` closure capturing `AppHandle` and emitting `campaign_progress` with the `ProgressEvent` fields (camelCase keys to match the frontend listener: `sent`, `failed`, `pending`, `current_number`, `status`).
+- Throttle not required (one event per send is naturally rate-limited by human-mode delays).
+- `get_status` keeps working unchanged; the counters in `AppState` stay the source of truth for the REST API.
+
+**Patterns to follow:**
+- Frontend listener in `src/pages/sending.html` (`listen('campaign_progress', ...)`) — emit payload shape must match what it reads.
+
+**Test scenarios:**
+- Happy path: campaign of 3 contacts → UI counters tick 1/0/2 → 2/0/1 → 3/0/0 and the bar fills to 100%.
+- Edge case: failed send increments Failed and the bar still progresses.
+- Error path: pressing Stop mid-run → final event arrives, counters freeze, no further events after stop.
+- Integration: progress events from window A never appear in window B (separate processes/webviews).
+
+**Verification:**
+- Manual blast to 2-3 numbers shows live counter movement; log shows one emitted event per send attempt.
+
+---
+
+- [ ] U4. **Message formatting toolbar + emoji picker**
+
+**Goal:** OKESENDER-style Bold/Italic/Strikethrough/Monospace/Emoji buttons above the message body.
+
+**Requirements:** R6
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src/pages/sending.html`
+
+**Approach:**
+- A slim button row between the label and the textarea: **B**, *I*, ~S~, `` ` `` mono, 🙂 emoji.
+- Each formatter wraps the current textarea selection with the WhatsApp marker (`*sel*`, `_sel_`, `~sel~`, `` ```sel``` ``); empty selection inserts the marker pair and places the cursor inside.
+- Emoji button toggles a small inline grid (common emojis: 😀😂🥹😍🤩😎👍🙏🔥💯🎉✅❤️🤣😭😅🙌💪👌🤝🚀💡) inserting at the cursor.
+- Draft persistence (existing localStorage mechanism) automatically covers toolbar output — no extra work.
+
+**Patterns to follow:**
+- Existing button styles (`btn btn-sm`); existing draft `saveDraft()` wiring in the same file.
+
+**Test scenarios:**
+- Happy path: select "promo", click B → `*promo*` in the textarea.
+- Edge case: no selection → clicking B inserts `**` with the cursor between the stars.
+- Edge case: toolbar edits trigger the draft save (switch tabs and back → formatting preserved).
+- Happy path: emoji click inserts at cursor without losing focus of the textarea.
+
+**Verification:**
+- Compose a message with bold + emoji, send to a test number, verify WhatsApp renders the formatting.
+
+---
+
+- [ ] U5. **Settings semantics clarification**
+
+**Goal:** Make the Campaign Settings vs Settings split self-explanatory.
+
+**Requirements:** R7
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src/pages/sending.html` (panel subtitle)
+- Modify: `src/pages/settings.html` (section subtitle)
+
+**Approach:**
+- Campaign Settings panel gains a one-line subtitle: "Per-campaign settings — applied to this send only."
+- Settings page gains a subtitle on the app section: "App-wide settings — Chrome, API, updates. Campaign options live on the Send Campaign page."
+- No layout or theme changes.
+
+**Patterns to follow:**
+- Existing `page-subtitle` / panel header conventions.
+
+**Test scenarios:**
+- Test expectation: none — copy-only change, verified visually.
+
+**Verification:**
+- Both pages read unambiguously; no functional change.
+
+---
+
+- [ ] U6. **Persistent campaign log / sent campaigns history**
+
+**Goal:** Campaign logs survive app restarts — past campaigns listed with date, message preview, and sent/failed counts (OKESENDER "Sent Campaigns" parity).
+
+**Requirements:** R8
+
+**Dependencies:** U1 (profiles isolate their history automatically)
+
+**Files:**
+- Modify: `src-tauri/src/campaign/log_exporter.rs` (append-to-disk writer)
+- Modify: `src-tauri/src/main.rs` (persist log entries at emit time + `list_sent_campaigns` command)
+- Modify: `src/pages/log.html` (history list with dates + per-campaign sent/failed summary)
+
+**Approach:**
+- Each campaign start appends a JSON-lines record to `app_dir()/Data/campaigns.jsonl`: `{ started_at, account, message_preview, total, sent, failed }`; counters updated on completion (rewrite last line or sidecar state).
+- Log page gains a "Past campaigns" section reading that file, newest first; existing live log stays as-is.
+- Export button on each history row reuses the CSV exporter.
+
+**Patterns to follow:**
+- Existing `log_exporter.rs` CSV writing; existing `Data/` directory convention.
+
+**Test scenarios:**
+- Happy path: run a campaign, close the app, reopen → history row with correct date and counts.
+- Edge case: app killed mid-campaign → record shows partial counts with status "interrupted".
+- Edge case: no campaigns yet → empty-state message, no file errors.
+
+**Verification:**
+- Restart the app after a real blast; history shows the campaign without re-running anything.
+
+---
+
+- [ ] U7. **Auto-unique export filenames**
+
+**Goal:** Every export defaults to a timestamped filename — no manual renaming, no silent overwrites.
+
+**Requirements:** R9
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `src/pages/groups.html` (CSV + XLSX defaultPath)
+- Modify: `src/pages/log.html` (log export defaultPath)
+
+**Approach:**
+- Shared helper `stampName(base, ext)` → `blastwa-groups-2026-08-25-1442.csv` (local time, minute precision); used as the save dialog `defaultPath` everywhere exports happen.
+
+**Patterns to follow:**
+- Existing save-dialog calls in groups.html.
+
+**Test scenarios:**
+- Happy path: two exports a minute apart produce two distinct default filenames.
+- Edge case: user keeps the suggested name in a folder with an existing file → native save dialog's own overwrite confirmation handles it.
+
+**Verification:**
+- Export twice; second dialog suggests a different name without any manual editing.
+
+---
+
+## Backlog (OKESENDER parity, intentionally deferred)
+
+Reverse-engineered OKESENDER features NOT in this plan's scope, tracked for future plans:
+
+- Interactive buttons / list messages (`WAPI.sendButtons`, `sendListMenu`) — needs WPP support checks
+- Catalog builder, Multi-channel send, Engager module
+- Sending modes: Blind mode (no status tracking), Multi-channel
+- Schedule send, multiple-message rotation per campaign
+- Numbers filter/generator enhancements beyond the existing checker
+- Voice note (PTT) + GIF attachments
+
+---
+
+## System-Wide Impact
+
+- **Interaction graph:** progress emission adds a per-send Tauri event; the existing frontend listener is the only consumer. REST `/api/status` unaffected (reads the same counters).
+- **Error propagation:** profile resolution failures (bad name) fail fast at startup with a clear message; API port walk logs each retry.
+- **State lifecycle risks:** two windows writing the SAME profile dir is user-error — mitigated by the launcher always passing a fresh/existing profile name and the title showing the active profile; no file locking added (documented limitation).
+- **API surface parity:** REST API exists per profile instance; external consumers must target the profile's effective port (visible in that window's Settings page).
+- **Unchanged invariants:** account persistence format, Chrome isolation flags, CDP architecture, WPP injection pipeline, group export — all untouched.
+
+---
+
+## Risks & Dependencies
+
+| Risk | Mitigation |
+|------|------------|
+| Two windows opened on the same profile → concurrent writes to accounts.json/contacts | Window title shows the active profile; launcher flow steers to distinct profiles; accepted limitation for v1 |
+| API port collision across profiles | Bind-failure port walk + persist effective port (U2) |
+| Progress events flooding the webview on huge lists | One event per send; human-mode delays naturally throttle |
+| Profile name misuse in filesystem | Sanitize to a safe segment at the U1 boundary; single validation point |
+
+---
+
+## Sources & References
+
+- Reverse-engineered OKESENDER strings: `FrmGroupGrabber`, export dialogs, formatting toolbar buttons (`D:/Tes/OKESENDER.exe` UTF-16 extraction)
+- Related code: `src-tauri/src/campaign/sender.rs` (`on_progress` hook), `src/pages/sending.html` (`campaign_progress` listener)
