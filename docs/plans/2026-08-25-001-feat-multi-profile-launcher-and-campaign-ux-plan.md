@@ -265,7 +265,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U6. **Persistent campaign log / sent campaigns history**
+- [x] U6. **Persistent campaign log / sent campaigns history**
 
 **Goal:** Campaign logs survive app restarts — past campaigns listed with date, message preview, and sent/failed counts (OKESENDER "Sent Campaigns" parity).
 
@@ -296,7 +296,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U7. **Auto-unique export filenames**
+- [x] U7. **Auto-unique export filenames**
 
 **Goal:** Every export defaults to a timestamped filename — no manual renaming, no silent overwrites.
 
