@@ -68,9 +68,13 @@
           <option value="custom">Custom</option>
         </select>
       </div>
-      <div class="field checkbox-label" style="margin-bottom:0">
+      <div class="field checkbox-label">
         <input type="checkbox" id="safe-mode" />
         <label for="safe-mode">Safe mode (verify chat exists before send)</label>
+      </div>
+      <div class="field checkbox-label" style="margin-bottom:0;margin-top:8px">
+        <input type="checkbox" id="blind-mode" />
+        <label for="blind-mode">Blind mode (skip all verification for speed; overrides safe mode)</label>
       </div>
       <div class="field" style="margin-bottom:0;margin-top:8px">
         <label>Schedule (optional: leave empty to send now)</label>
@@ -116,7 +120,7 @@
     // the compose state lives in localStorage and is restored on init
     const DRAFT_KEY = 'blastwa.draft.sending';
     const draftFields = ['msg-body', 'caption', 'account-select', 'delay-min',
-      'delay-max', 'human-preset', 'safe-mode', 'schedule-at'];
+      'delay-max', 'human-preset', 'safe-mode', 'schedule-at', 'blind-mode'];
     let attachmentPath = null;
 
     function saveDraft() {
@@ -287,6 +291,7 @@
           attachmentPath: attachmentPath,
           caption: $('caption').value || null,
           isSafeMode: $('safe-mode').checked,
+          isBlindMode: $('blind-mode').checked,
           scheduleAt: scheduleRaw || null,
         });
         const nVariants = r && r.variants ? r.variants : 1;

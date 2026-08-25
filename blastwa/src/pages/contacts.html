@@ -83,10 +83,50 @@
   </div>
 </div>
 
+<div class="panel">
+  <div class="panel-header">
+    <span>Number Generator</span>
+    <span class="panel-menu">&#9776;</span>
+  </div>
+  <div class="panel-body">
+    <div class="flex-between">
+      <div class="row">
+        <input type="text" id="gen-prefix" placeholder="prefix, e.g. 6281234" style="width:160px" maxlength="15" />
+        <input type="number" id="gen-start" placeholder="from" style="width:90px" min="0" value="0" />
+        <input type="number" id="gen-end" placeholder="to" style="width:90px" min="0" value="99" />
+        <button class="btn btn-sm" id="btn-generate">Generate</button>
+      </div>
+      <span style="font-size:11px;color:var(--text-dim)">max 1000 per batch; always run the checker before blasting</span>
+    </div>
+    <p id="gen-status" style="margin:8px 0 0;color:var(--text-dim);font-size:11px"></p>
+  </div>
+</div>
+
 <script>
   window.init_contacts = async function () {
     const { invoke, listen, addCleanup } = window.blastwa;
     await refresh();
+
+    document.getElementById('btn-generate').addEventListener('click', async () => {
+      const prefix = document.getElementById('gen-prefix').value.trim();
+      const start = Number(document.getElementById('gen-start').value);
+      const end = Number(document.getElementById('gen-end').value);
+      const status = document.getElementById('gen-status');
+      if (!prefix) {
+        status.textContent = 'Prefix is required.';
+        return;
+      }
+      try {
+        const r = await invoke('add_generated_contacts', {
+          prefix, rangeStart: start, rangeEnd: end,
+        });
+        status.textContent =
+          'Generated ' + ((r && r.added) ?? 0) + ' candidates. Run the checker and Keep Valid Only before blasting.';
+        await refresh();
+      } catch (e) {
+        status.textContent = 'Generate failed: ' + (e && e.message ? e.message : e);
+      }
+    });
 
     // checker account options mirror the send page account select
     try {

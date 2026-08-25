@@ -25,6 +25,9 @@ pub struct CampaignConfig {
     pub sleep_for_s: u64,
     #[serde(default)]
     pub is_safe_mode: bool,
+    /// blind mode: never pre-verify chat existence, accept silent failures
+    #[serde(default)]
+    pub is_blind_mode: bool,
     #[serde(default)]
     pub schedule_at: Option<chrono::DateTime<chrono::Local>>,
     #[serde(default)]
@@ -40,6 +43,7 @@ impl Default for CampaignConfig {
             sleep_after: 0,
             sleep_for_s: 60,
             is_safe_mode: false,
+            is_blind_mode: false,
             schedule_at: None,
             human: HumanBehaviorConfig::default(),
         }
@@ -102,6 +106,8 @@ pub async fn run_campaign(
             ..cfg.human.clone()
         },
     );
+    // blind mode (U12) overrides the safe-mode pre-check entirely
+    let effective_safe = cfg.is_safe_mode && !cfg.is_blind_mode;
 
     let total = order.len();
     for idx in 0..total {
@@ -162,13 +168,13 @@ pub async fn run_campaign(
                             &data_uri,
                             filename,
                             &caption,
-                            cfg.is_safe_mode,
+                            effective_safe,
                         )
                         .await
                 }
             }
             None => injector
-                .send_message(&contact.wa_id(), &text_body, cfg.is_safe_mode)
+                .send_message(&contact.wa_id(), &text_body, effective_safe)
                 .await,
         };
 

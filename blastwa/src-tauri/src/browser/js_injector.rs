@@ -245,24 +245,24 @@ impl JsInjector {
         let cap = js_escape(caption);
         let script = format!(
             r#"(async () => {{
-                function getFileType(n) {{
+                function getFileOpts(n) {{
                     var e = n.split('.').pop().toLowerCase();
-                    var m = {{ jpg:'image',jpeg:'image',png:'image',gif:'image',webp:'image',
-                              mp4:'video',mov:'video',avi:'video',mp3:'audio',ogg:'audio',
+                    var m = {{ jpg:'image',jpeg:'image',png:'image',webp:'image',
+                              mp4:'video',mov:'video',avi:'video',mp3:'audio',
                               pdf:'document',doc:'document',docx:'document',xls:'document',
                               xlsx:'document',ppt:'document',pptx:'document',txt:'document' }};
-                    return m[e] || 'document';
+                    var o = {{ type: m[e] || 'document', caption: '{cap}', filename: '{fn}' }};
+                    // wa-js v4.6: animated gifs ride the video path with isGif
+                    // (bundle media prep sets asGif from options.isGif)
+                    if (e === 'gif') {{ o.type = 'video'; o.isGif = true; }}
+                    return o;
                 }}
                 try {{
                     if ({is_safe}) {{
                         var exists = await WPP.number.queryExists('{id}');
                         if (!exists || !exists.exists) return {{ sentStatus: false, error: "chat not found" }};
                     }}
-                    await WPP.chat.sendFileMessage('{id}', '{b64}', {{
-                        type: getFileType('{fn}'),
-                        caption: '{cap}',
-                        filename: '{fn}'
-                    }});
+                    await WPP.chat.sendFileMessage('{id}', '{b64}', getFileOpts('{fn}'));
                     return {{ sentStatus: true }};
                 }} catch (ex) {{
                     return {{ sentStatus: false, error: String(ex) }};

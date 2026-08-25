@@ -351,6 +351,7 @@ async fn start_campaign(
     attachment_path: Option<String>,
     caption: Option<String>,
     schedule_at: Option<String>,
+    is_blind_mode: Option<bool>,
     ctx: State<'_, AppCtx>,
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
@@ -397,6 +398,7 @@ async fn start_campaign(
         delay_min_s: human.delay_min_s,
         delay_max_s: human.delay_max_s,
         human,
+        is_blind_mode: is_blind_mode.unwrap_or(false),
         schedule_at: scheduled,
         ..Default::default()
     };
@@ -778,6 +780,40 @@ fn keep_contacts_only(valid_numbers: Vec<String>, ctx: State<'_, AppCtx>) -> Res
     Ok(serde_json::json!({ "ok": true, "kept": kept }))
 }
 
+/// generate candidate numbers under a prefix range into the send list (U18).
+/// output feeds the checker, never straight into a campaign blast.
+#[tauri::command]
+fn add_generated_contacts(
+    prefix: String,
+    range_start: u64,
+    range_end: u64,
+    ctx: State<'_, AppCtx>,
+) -> Result<serde_json::Value, String> {
+    const MAX_RANGE: u64 = 1000;
+    let digits: String = prefix.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.len() < 6 {
+        return Err("prefix must carry at least 6 digits".into());
+    }
+    if range_end < range_start {
+        return Err("range end is below range start".into());
+    }
+    if range_end - range_start + 1 > MAX_RANGE {
+        return Err(format!("range too large (max {} per batch)", MAX_RANGE));
+    }
+    let mut list = ctx.contacts.lock().unwrap();
+    let mut added = 0usize;
+    for n in range_start..=range_end {
+        let num = format!("{}{}", digits, n);
+        if list.contacts.iter().any(|c| c.number == num) {
+            continue;
+        }
+        list.contacts
+            .push(blastwa_core::message::variables::ContactRow::from_fullname(&num, ""));
+        added += 1;
+    }
+    Ok(serde_json::json!({ "ok": true, "added": added }))
+}
+
 // ---------- autoreply ----------
 
 #[tauri::command]
@@ -1096,7 +1132,7 @@ fn main() {
             start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
-            keep_contacts_only,
+            keep_contacts_only, add_generated_contacts,
             load_rules, save_rules,
             list_templates, search_templates, save_template, delete_template,
             get_logs, export_log,
