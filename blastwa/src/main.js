@@ -163,6 +163,8 @@ menubar.addEventListener('click', (ev) => {
       }
     } else if (action === 'about') {
       alert('BlastWA v0.2.0\nWhatsApp bulk sender.\nRust + Tauri v2 + Chrome CDP.\nNo license, ever.');
+    } else if (action === 'new-profile') {
+      openProfileModal();
     }
     return;
   }
@@ -187,6 +189,88 @@ menubar.addEventListener('mouseover', (ev) => {
     menubar.querySelectorAll('.menu-item.open').forEach((m) => m.classList.remove('open'));
     item.classList.add('open');
   }
+});
+
+// ----- profile launcher modal (U2) -----
+// lives outside the page router: one instance in index.html, wired once at
+// module scope, never re-created on navigation
+
+const profileModal = document.getElementById('profile-modal');
+
+function showProfileError(msg) {
+  const el = document.getElementById('profile-error');
+  if (!msg) {
+    el.classList.add('hidden');
+    el.textContent = '';
+  } else {
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+}
+
+async function refreshProfileChips() {
+  const wrap = document.getElementById('profile-chips');
+  const listWrap = document.getElementById('profile-list-wrap');
+  let names = [];
+  try {
+    names = await invoke('list_profiles');
+    if (!Array.isArray(names)) names = [];
+  } catch (e) {
+    names = [];
+  }
+  if (!names.length) {
+    listWrap.style.display = 'none';
+    return;
+  }
+  listWrap.style.display = '';
+  wrap.innerHTML = '';
+  for (const name of names) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'profile-chip';
+    chip.textContent = name;
+    chip.addEventListener('click', () => {
+      document.getElementById('profile-name').value = name;
+      showProfileError('');
+    });
+    wrap.appendChild(chip);
+  }
+}
+
+function openProfileModal() {
+  document.getElementById('profile-name').value = '';
+  showProfileError('');
+  profileModal.classList.remove('hidden');
+  refreshProfileChips();
+  document.getElementById('profile-name').focus();
+}
+
+function closeProfileModal() {
+  profileModal.classList.add('hidden');
+}
+
+async function submitProfile() {
+  const raw = document.getElementById('profile-name').value.trim();
+  if (!raw) {
+    showProfileError('Profile name is required.');
+    return;
+  }
+  try {
+    await invoke('open_profile_window', { profile: raw });
+    closeProfileModal();
+  } catch (e) {
+    showProfileError(e.message || String(e));
+  }
+}
+
+document.getElementById('profile-cancel').addEventListener('click', closeProfileModal);
+document.getElementById('profile-open').addEventListener('click', submitProfile);
+document.getElementById('profile-name').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') submitProfile();
+});
+profileModal.addEventListener('click', (ev) => {
+  // click on the dim backdrop closes; clicks inside the panel do not
+  if (ev.target === profileModal) closeProfileModal();
 });
 
 // ----- status bar updater (module scope: created exactly once) -----

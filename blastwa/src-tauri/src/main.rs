@@ -21,7 +21,7 @@ use blastwa_core::message::spintax;
 use blastwa_core::message::template_library::{MessageTemplate, TemplateLibrary};
 use blastwa_core::updater::wpp_updater;
 
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 
 struct AppCtx {
     cfg: Mutex<AppConfig>,
@@ -772,6 +772,7 @@ fn get_config(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
         "human_mode_preset": cfg.human_mode_preset,
         "api_enabled": cfg.api_enabled,
         "api_port": cfg.api_port,
+        "active_profile": AppConfig::active_profile(),
     }))
 }
 
@@ -842,8 +843,76 @@ async fn update_wpp() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "ok": true, "version": tag }))
 }
 
+// ---------- multi-profile launcher ----------
+
+/// spawn a fully isolated second instance bound to its own data root.
+/// the child re-enters main() which resolves --profile before any config
+/// load, so every storage path isolates without further wiring.
+#[tauri::command]
+fn open_profile_window(profile: String) -> Result<(), String> {
+    let safe = blastwa_core::config::settings::sanitize_name(&profile);
+    if safe.is_empty() {
+        return Err("Profile name is required".into());
+    }
+    let exe = std::env::current_exe().map_err(|e| format!("cannot locate exe: {e}"))?;
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg("--profile").arg(&safe);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
+    cmd.spawn()
+        .map_err(|e| format!("failed to spawn profile window: {e}"))?;
+    log::info!("spawned profile window: {safe}");
+    Ok(())
+}
+
+/// existing profiles on disk (classic root scan, sorted); empty when none
+#[tauri::command]
+fn list_profiles() -> Vec<String> {
+    let dir = AppConfig::classic_root().join("profiles");
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.path().is_dir())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+fn parse_cli_profile() -> Option<String> {
+    let mut args = std::env::args().skip(1);
+    while let Some(a) = args.next() {
+        if let Some(rest) = a.strip_prefix("--profile=") {
+            return Some(rest.to_string());
+        }
+        if a == "--profile" {
+            return args.next();
+        }
+    }
+    None
+}
+
 fn main() {
     env_logger::init();
+
+    // profile isolation must be decided before any config load: app_dir(),
+    // config_path(), and every derived storage path hang off it
+    let cli_profile = parse_cli_profile()
+        .or_else(|| std::env::var("BLASTWA_PROFILE").ok().filter(|s| !s.is_empty()));
+    if let Some(name) = cli_profile.as_deref() {
+        if let Err(e) = AppConfig::init_profile(name) {
+            eprintln!("blastwa: {e}");
+            std::process::exit(2);
+        }
+        log::info!("launcher profile active: {}", AppConfig::active_profile().unwrap_or("?"));
+    }
 
     let cfg = AppConfig::load_or_default();
     let paths = cfg.init_data_dirs().expect("init data dirs");
@@ -863,13 +932,29 @@ fn main() {
 
     let pipeline = Pipeline::new(state.clone(), cfg.chrome_path.clone(), paths.accounts.clone());
 
-    // headless rest api alongside the gui when enabled
+    // headless rest api alongside the gui when enabled.
+    // bind walks up on port collision; the effective port is persisted back
+    // into this profile's config so the Settings page always tells the truth
     if cfg.api_enabled {
-        let port = cfg.api_port;
+        let desired_port = cfg.api_port;
         let api_state = state.clone();
+        let cfg_for_port = cfg.clone();
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = server::serve(port, api_state).await {
-                log::error!("api server died: {e}");
+            match server::bind_listener(desired_port).await {
+                Ok((listener, effective)) => {
+                    if effective != desired_port {
+                        log::warn!("api port {desired_port} busy, using {effective}");
+                        let mut c = cfg_for_port;
+                        c.api_port = effective;
+                        if let Err(e) = c.save() {
+                            log::warn!("failed to persist effective api port: {e}");
+                        }
+                    }
+                    if let Err(e) = server::serve(listener, api_state).await {
+                        log::error!("api server died: {e}");
+                    }
+                }
+                Err(e) => log::error!("api server bind failed: {e:#}"),
             }
         });
     }
@@ -895,6 +980,16 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // profile instances announce themselves in the title bar; the
+            // default instance stays untitled
+            if let Some(p) = AppConfig::active_profile() {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_title(&format!("BlastWA - WhatsApp Bulk Sender [Profile: {p}]"));
+                }
+            }
+            Ok(())
+        })
         .manage(ctx)
         .invoke_handler(tauri::generate_handler![
             list_accounts, add_account, remove_account, open_browser,
@@ -906,6 +1001,7 @@ fn main() {
             get_logs, export_log,
             get_config, save_config, preview_spintax,
             get_wpp_version, check_wpp_update, update_wpp,
+            open_profile_window, list_profiles,
         ])
         .run(tauri::generate_context!())
         .expect("error while running blastwa");

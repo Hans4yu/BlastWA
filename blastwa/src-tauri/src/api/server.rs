@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -172,8 +172,35 @@ async fn accounts(
     ok(data)
 }
 
-/// bind loopback ONLY — never 0.0.0.0. enforced here in code, not config.
-pub async fn serve(port: u16, state: AppState) -> Result<()> {
+/// bind loopback ONLY, never 0.0.0.0: enforced here in code, not config.
+/// walks up to 100 ports past the requested one when busy so multiple
+/// profile instances never collide; returns the listener plus the
+/// effective port for the caller to persist.
+pub async fn bind_listener(requested: u16) -> Result<(tokio::net::TcpListener, u16)> {
+    let last = requested.saturating_add(100);
+    let mut port = requested;
+    loop {
+        match tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await {
+            Ok(listener) => {
+                if port != requested {
+                    log::info!("local api landed on walked port {port} ({requested} was busy)");
+                }
+                return Ok((listener, port));
+            }
+            Err(e) => {
+                if port >= last {
+                    return Err(e).with_context(|| {
+                        format!("no free api port in range {requested}-{last}")
+                    });
+                }
+                port += 1;
+            }
+        }
+    }
+}
+
+/// serve the api on an already-bound listener (loopback only by construction)
+pub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> Result<()> {
     let app = Router::new()
         .route("/api/blast", post(blast))
         .route("/api/status", get(status))
@@ -181,9 +208,32 @@ pub async fn serve(port: u16, state: AppState) -> Result<()> {
         .route("/api/stop", post(stop))
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = listener.local_addr()?;
     log::info!("local api listening on http://{addr}");
-    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bind_walks_up_when_port_taken() {
+        // occupy a port, then ask for it: walk must land on +1
+        let (listener, _) = bind_listener(0).await.expect("ephemeral bind");
+        let taken = listener.local_addr().unwrap().port();
+        let (_next_listener, effective) = bind_listener(taken).await.expect("walk bind");
+        assert_eq!(effective, taken.wrapping_add(1));
+    }
+
+    #[tokio::test]
+    async fn bind_returns_requested_when_free() {
+        // grab a free port first and release it: low collision odds
+        let probe = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = probe.local_addr().unwrap().port();
+        drop(probe);
+        let (_listener, effective) = bind_listener(port).await.unwrap();
+        assert_eq!(effective, port);
+    }
 }

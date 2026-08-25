@@ -18,6 +18,8 @@
           <button data-action="nav" data-page="contacts">Import Contacts</button>
           <button data-action="nav" data-page="log">Export Log</button>
           <div class="menu-sep"></div>
+          <button data-action="new-profile">New Window (Profile...)</button>
+          <div class="menu-sep"></div>
           <button data-action="exit">Exit</button>
         </div>
       </div>
@@ -114,6 +116,29 @@
       <span class="status-right">BlastWA v0.2.0</span>
     </div>
   </div>
+
+    <!-- profile launcher modal (U2): native dialog plugin has no text input,
+         so this is a plain DOM overlay in the locked Light Teal style -->
+    <div class="modal-overlay hidden" id="profile-modal">
+      <div class="modal-panel">
+        <div class="panel-header"><span>New Window (Profile)</span></div>
+        <div class="modal-body">
+          <div class="field">
+            <label>Profile name (letters, numbers, underscore, dash)</label>
+            <input type="text" id="profile-name" maxlength="64" placeholder="e.g. work" />
+          </div>
+          <div id="profile-list-wrap">
+            <label>Existing profiles</label>
+            <div class="profile-chips" id="profile-chips"></div>
+          </div>
+          <p class="modal-error hidden" id="profile-error"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-sm" id="profile-cancel">Cancel</button>
+          <button class="btn btn-sm" id="profile-open">Open Window</button>
+        </div>
+      </div>
+    </div>
 
   <script type="module" src="main.js"></script>
 </body>

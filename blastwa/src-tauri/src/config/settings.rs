@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -94,11 +95,48 @@ pub fn sanitize_name(name: &str) -> String {
         .collect()
 }
 
+// process-global launcher profile, set exactly once at startup before any
+// config load. absent means classic root (no profile isolation).
+static ACTIVE_PROFILE: OnceLock<String> = OnceLock::new();
+
+/// pure resolution logic so tests can exercise it without touching the
+/// process-global profile state
+fn resolve_app_dir(base: &Path, profile: Option<&str>) -> PathBuf {
+    match profile {
+        // re-sanitize here so the returned path is always a single safe
+        // segment even if a caller skipped init validation
+        Some(p) => base.join("profiles").join(sanitize_name(p)),
+        None => base.to_path_buf(),
+    }
+}
+
 impl AppConfig {
-    pub fn app_dir() -> PathBuf {
+    /// classic data root, ignoring any active profile (used by the launcher
+    /// to scan profiles/ across all instances)
+    pub fn classic_root() -> PathBuf {
         dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("BlastWA")
+    }
+
+    /// activate launcher profile isolation for this process; fails when the
+    /// sanitized name collapses to an empty directory segment
+    pub fn init_profile(name: &str) -> Result<(), String> {
+        let safe = sanitize_name(name);
+        if safe.is_empty() {
+            return Err("profile name resolves to an empty directory segment".into());
+        }
+        let _ = ACTIVE_PROFILE.set(safe);
+        Ok(())
+    }
+
+    /// active profile name, if launcher isolation was activated in main()
+    pub fn active_profile() -> Option<&'static str> {
+        ACTIVE_PROFILE.get().map(|s| s.as_str())
+    }
+
+    pub fn app_dir() -> PathBuf {
+        resolve_app_dir(&Self::classic_root(), Self::active_profile())
     }
 
     pub fn config_path() -> PathBuf {
@@ -154,5 +192,37 @@ mod tests {
         let back: AppConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(back.api_port, 8765);
         assert_eq!(back.default_delay_min, 5);
+    }
+
+    #[test]
+    fn resolve_without_profile_is_classic_root() {
+        let base = Path::new("C:\\Users\\x\\AppData\\Roaming\\BlastWA");
+        assert_eq!(resolve_app_dir(base, None), base);
+    }
+
+    #[test]
+    fn resolve_with_profile_lands_under_profiles() {
+        let base = Path::new("C:\\data\\BlastWA");
+        let dir = resolve_app_dir(base, Some("work"));
+        assert_eq!(dir, Path::new("C:\\data\\BlastWA\\profiles\\work"));
+    }
+
+    #[test]
+    fn resolve_sanitizes_illegal_profile_names() {
+        let base = Path::new("C:\\data\\BlastWA");
+        // path separators and dots collapse into one underscore-joined
+        // segment: no traversal possible
+        let dir = resolve_app_dir(base, Some("..\\evil"));
+        assert_eq!(dir, Path::new("C:\\data\\BlastWA\\profiles\\___evil"));
+        assert!(dir.components().count() == base.join("profiles").components().count() + 1);
+    }
+
+    #[test]
+    fn init_profile_rejects_only_truly_empty_names() {
+        // sanitize maps every illegal char to underscore, so " /// " becomes
+        // "___" (ugly but safe); only the empty string collapses to an empty
+        // segment and must be rejected at startup
+        assert!(AppConfig::init_profile("").is_err());
+        assert!(AppConfig::init_profile(" /// ").is_ok());
     }
 }
