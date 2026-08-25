@@ -386,7 +386,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U10. **Pause/Resume audit and fix**
+- [x] U10. **Pause/Resume audit and fix**
 
 **Goal:** Pause suspends the send loop mid-campaign; Resume continues it; UI shows a PAUSED state.
 
@@ -499,7 +499,7 @@ injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incid
 
 ---
 
-- [ ] U14. **Import contacts from WhatsApp phonebook**
+- [x] U14. **Import contacts from WhatsApp phonebook**
 
 **Goal:** Pull the account's saved contacts into the blast list.
 
@@ -522,7 +522,7 @@ injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incid
 
 ---
 
-- [ ] U15. **Interactive buttons + list messages**
+- [x] U15. **Interactive buttons + list messages**
 
 **Goal:** Send messages with interactive reply buttons or a list menu (OKESENDER `FrmInteactiveButtonsBuilder`, `WAPI.sendButtons`, `sendListMenu`).
 
@@ -545,7 +545,7 @@ injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incid
 
 ---
 
-- [ ] U16. **Catalog message builder**
+- [x] U16. **Catalog message builder**
 
 **Goal:** Build and send catalog-style messages (OKESENDER `FrmCatalogBuilder`: title, description, items with thumbnails).
 
@@ -568,7 +568,7 @@ injected bundle before each unit's JS work (the `getAll` vs `getAllGroups` incid
 
 ---
 
-- [ ] U17. **Multi-channel send**
+- [x] U17. **Multi-channel send**
 
 **Goal:** One campaign distributed across several connected accounts (round-robin or split), multiplying daily volume.
 
