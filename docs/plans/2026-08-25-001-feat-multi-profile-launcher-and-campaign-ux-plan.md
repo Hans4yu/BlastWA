@@ -323,7 +323,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U8. **Multiple message rotation**
+- [x] U8. **Multiple message rotation**
 
 **Goal:** Compose N message variants; contact i receives variant i mod N (then spintax + variables + Human Mode apply per send).
 
@@ -356,7 +356,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U9. **Checker → import valid numbers**
+- [x] U9. **Checker → import valid numbers**
 
 **Goal:** Filter-then-blast flow: check numbers, then import only the valid ones into the contact list in one click.
 
@@ -417,7 +417,7 @@ Independently, the campaign progress UI is dead (frontend listens for `campaign_
 
 ---
 
-- [ ] U11. **Schedule send**
+- [x] U11. **Schedule send**
 
 **Goal:** Queue a campaign to start at a chosen time, with a live countdown and cancel-before-fire.
 
