@@ -90,7 +90,15 @@ impl SessionManager {
 /// a new spawn attaches to the existing process and the port we passed is
 /// never opened. scans the candidate port first, then the usual range,
 /// preferring endpoints that currently host a web.whatsapp.com tab.
-pub async fn discover_wa_port(candidate: Option<u16>) -> Option<u16> {
+///
+/// `taken` holds ports already claimed by other accounts: without it a
+/// second account discovers the FIRST whatsapp endpoint in the range and
+/// silently binds to another account's session, so a multi-account blast
+/// sends every chunk from the same number.
+pub async fn discover_wa_port_excluding(
+    candidate: Option<u16>,
+    taken: &[u16],
+) -> Option<u16> {
     let mut ports = Vec::new();
     if let Some(c) = candidate {
         ports.push(c);
@@ -99,6 +107,9 @@ pub async fn discover_wa_port(candidate: Option<u16>) -> Option<u16> {
 
     let mut any_alive: Option<u16> = None;
     for p in ports {
+        if taken.contains(&p) {
+            continue;
+        }
         if tokio::net::TcpStream::connect(("127.0.0.1", p)).await.is_err() {
             continue;
         }
@@ -110,6 +121,10 @@ pub async fn discover_wa_port(candidate: Option<u16>) -> Option<u16> {
         }
     }
     any_alive
+}
+
+pub async fn discover_wa_port(candidate: Option<u16>) -> Option<u16> {
+    discover_wa_port_excluding(candidate, &[]).await
 }
 
 async fn has_whatsapp_target(port: u16) -> bool {

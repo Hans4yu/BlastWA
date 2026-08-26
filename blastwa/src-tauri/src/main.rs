@@ -98,7 +98,18 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
         sm.launch(&owned, port).await.map(|_| port).ok()
     });
     let spawned_port: Option<u16> = handle.await.map_err(|e| e.to_string())?;
-    blastwa_core::browser::cdp_client::discover_wa_port(spawned_port)
+    // ports already owned by other accounts must not be handed to this one:
+    // discovery prefers "any endpoint hosting whatsapp", which would bind a
+    // second account to the first account's live session.
+    let taken: Vec<u16> = {
+        let reg = server::sessions_registry();
+        let list = reg.lock().await;
+        list.iter()
+            .filter(|(n, _): &&(String, u16)| n != name)
+            .map(|(_, p)| *p)
+            .collect()
+    };
+    blastwa_core::browser::cdp_client::discover_wa_port_excluding(spawned_port, &taken)
         .await
         .ok_or_else(|| "chrome cdp endpoint not found after launch".to_string())
 }

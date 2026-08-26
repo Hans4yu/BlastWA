@@ -26,6 +26,10 @@ pub struct Pipeline {
     /// global gate: only one wpp injection at a time (concurrent bundle
     /// execution on the same target resets the cdp websocket)
     pub wpp_inject_lock: Arc<tokio::sync::Mutex<()>>,
+    /// per-account launch gate. launching involves a qr wait of up to 3
+    /// minutes, so it must NOT be serialized behind the `pages` map lock:
+    /// status probes need that map while a launch is in flight.
+    launch_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
 impl Pipeline {
@@ -36,7 +40,22 @@ impl Pipeline {
             pages: Arc::new(Mutex::new(HashMap::new())),
             wpp_ready: Arc::new(tokio::sync::Mutex::new(std::collections::HashSet::new())),
             wpp_inject_lock: Arc::new(tokio::sync::Mutex::new(())),
+            launch_locks: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    /// per-account launch gate, created on demand
+    async fn launch_lock(&self, account: &str) -> Arc<tokio::sync::Mutex<()>> {
+        let mut locks = self.launch_locks.lock().await;
+        locks
+            .entry(account.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    }
+
+    /// cached handle for an account, if any. never blocks on a launch.
+    async fn cached_page(&self, account: &str) -> Option<chromiumoxide::Page> {
+        self.pages.lock().await.get(account).cloned()
     }
 
     /// main loop: take requests off the channel, run each in its own task
@@ -52,16 +71,27 @@ impl Pipeline {
     }
 
     pub async fn get_page(&self, account: &str) -> Result<chromiumoxide::Page> {
-        let mut pages = self.pages.lock().await;
-
-        // reuse a live session when we have one
-        if let Some(page) = pages.get(account) {
-            let probe = JsInjector::new(page).is_logged_in().await;
+        // the `pages` map lock is only ever held for map access. launching
+        // waits on a per-account gate instead, so a 3-minute qr wait can
+        // never block dashboard/status probes that just read the map.
+        if let Some(page) = self.cached_page(account).await {
+            let probe = JsInjector::new(&page).is_logged_in().await;
             if probe.unwrap_or(false) {
-                return Ok(page.clone());
+                return Ok(page);
             }
             log::warn!("session for {account} is dead, relaunching");
-            pages.remove(account);
+            self.pages.lock().await.remove(account);
+        }
+
+        let gate = self.launch_lock(account).await;
+        let _launching = gate.lock().await;
+
+        // another caller may have finished the launch while we queued
+        if let Some(page) = self.cached_page(account).await {
+            if JsInjector::new(&page).is_logged_in().await.unwrap_or(false) {
+                return Ok(page);
+            }
+            self.pages.lock().await.remove(account);
         }
 
         let port = find_free_port(9222).await;
@@ -123,7 +153,7 @@ impl Pipeline {
             .await
             .with_context(|| format!("account {account}: WPP.js bootstrap"))?;
 
-        pages.insert(account.to_string(), page.clone());
+        self.pages.lock().await.insert(account.to_string(), page.clone());
 
         // expose to /api/accounts
         let reg = crate::api::server::sessions_registry();
@@ -134,7 +164,6 @@ impl Pipeline {
 
         Ok(page)
     }
-
     async fn eval_debug(&self, page: &chromiumoxide::Page) -> Option<String> {
         let v = page
             .evaluate(
@@ -227,14 +256,23 @@ impl Pipeline {
     /// without waiting for login. finds the existing web.whatsapp.com tab or
     /// opens one, and stores the handle so status probes can observe it.
     pub async fn attach(&self, account: &str, port: u16) -> anyhow::Result<chromiumoxide::Page> {
-        let mut pages = self.pages.lock().await;
-
-        // reuse a handle that still evaluates
-        if let Some(page) = pages.get(account) {
-            if JsInjector::new(page).is_logged_in().await.is_ok() {
-                return Ok(page.clone());
+        // same discipline as get_page: hold the map lock only for map access,
+        // serialize the connect+discovery work on the per-account gate
+        if let Some(page) = self.cached_page(account).await {
+            if JsInjector::new(&page).is_logged_in().await.is_ok() {
+                return Ok(page);
             }
-            pages.remove(account);
+            self.pages.lock().await.remove(account);
+        }
+
+        let gate = self.launch_lock(account).await;
+        let _attaching = gate.lock().await;
+
+        if let Some(page) = self.cached_page(account).await {
+            if JsInjector::new(&page).is_logged_in().await.is_ok() {
+                return Ok(page);
+            }
+            self.pages.lock().await.remove(account);
         }
 
         let (browser, mut handler) =
@@ -282,7 +320,7 @@ impl Pipeline {
                     let _ = dup.clone().close().await;
                 }
             }
-            pages.insert(account.to_string(), page.clone());
+            self.pages.lock().await.insert(account.to_string(), page.clone());
             return Ok(page);
         }
 
@@ -290,7 +328,7 @@ impl Pipeline {
             .new_page("https://web.whatsapp.com")
             .await
             .context("opening whatsapp web tab")?;
-        pages.insert(account.to_string(), page.clone());
+        self.pages.lock().await.insert(account.to_string(), page.clone());
         // fresh tab: previous wpp memo no longer applies
         self.wpp_ready.lock().await.remove(account);
         Ok(page)
