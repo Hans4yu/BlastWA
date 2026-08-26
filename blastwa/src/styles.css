@@ -574,3 +574,21 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
   font-size: 11px;
 }
 
+/* per-field explainer: keeps labels short and moves the how-to into a
+   quieter line under them */
+.field-hint {
+  margin: 2px 0 var(--sp-1) 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.field-hint code {
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+  background: var(--table-head-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+
