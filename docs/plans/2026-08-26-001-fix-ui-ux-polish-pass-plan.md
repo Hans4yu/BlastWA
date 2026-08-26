@@ -103,7 +103,7 @@ Grouping: R1–R5 visual alignment · R6–R7 new features · R8 tooling & token
 
 ## Implementation Units
 
-- [ ] U1. **Restore the red safety net**
+- [x] U1. **Restore the red safety net**
 
 **Goal:** `node blastwa/src/verify_router_lifecycle.js` exits green (currently 3 failures).
 
@@ -128,7 +128,7 @@ Grouping: R1–R5 visual alignment · R6–R7 new features · R8 tooling & token
 **Verification:**
 - Harness exits 0 with no FAIL lines.
 
-- [ ] U2. **Token & control-height normalization**
+- [x] U2. **Token & control-height normalization**
 
 **Goal:** One source of truth for type sizes and control heights; `--primary` defined; checkboxes themed and aligned.
 
@@ -154,7 +154,7 @@ Grouping: R1–R5 visual alignment · R6–R7 new features · R8 tooling & token
 **Verification:**
 - `check_sending_page.js` still passes (all `$('id')` refs intact); visual: checkbox rows aligned, teal checkboxes.
 
-- [ ] U3. **Footer system: pills, slider, groups buttons**
+- [x] U3. **Footer system: pills, slider, groups buttons**
 
 **Goal:** All six footers (dashboard/contacts/groups/autoreply/log/templates) read as one system; slider aligned; groups buttons verified quiet and spaced.
 
@@ -178,7 +178,7 @@ Grouping: R1–R5 visual alignment · R6–R7 new features · R8 tooling & token
 **Verification:**
 - Fresh screenshots match the spec; no horizontal overflow at min width.
 
-- [ ] U4. **Dashboard actions row + account chips alignment**
+- [x] U4. **Dashboard actions row + account chips alignment**
 
 **Goal:** Uniform 24px action buttons with a legible pencil icon; chips vertically centered with visible selected state.
 
@@ -202,7 +202,7 @@ Grouping: R1–R5 visual alignment · R6–R7 new features · R8 tooling & token
 **Verification:**
 - Screenshots confirm; no layout shift on hover/selection.
 
-- [ ] U5. **Add Account in-app modal**
+- [x] U5. **Add Account in-app modal**
 
 **Goal:** Replace the native `prompt()` with a styled modal matching the profile-launcher pattern.
 
@@ -240,7 +240,7 @@ Grouping: R1–R5 visual alignment · R6–R7 new features · R8 tooling & token
 **Verification:**
 - Live CDP drive: modal opens, saves, cancels; screenshots captured.
 
-- [ ] U6. **Live status everywhere, without yanking**
+- [x] U6. **Live status everywhere, without yanking**
 
 **Goal:** Chips and counters reflect reality without switching tabs — on the Sending page AND on the Dashboard, where today's unconditional 3s poll destroys in-flight inline renames (same yank class this unit fixes).
 
@@ -270,7 +270,7 @@ Grouping: R1–R5 visual alignment · R6–R7 new features · R8 tooling & token
 **Verification:**
 - CDP live test: trigger state change (open/close browser), observe chip update without tab switch; rename-survival test on Dashboard.
 
-- [ ] U7. **Rebuild, full verification, screenshots**
+- [x] U7. **Rebuild, full verification, screenshots**
 
 **Goal:** Everything above proven in the actual exe.
 
