@@ -48,8 +48,9 @@
       <p class="panel-note">Per-campaign settings: applied to this send only.</p>
       <div class="field">
         <label>Account(s)</label>
-        <p class="field-hint">Ctrl-click or Shift-click to select multiple accounts for multi-channel blast.</p>
-        <select id="account-select" multiple size="3"><option value="">Default</option></select>
+        <p class="field-hint">Click to toggle. Select several to fan the blast across accounts (round-robin, no duplicates).</p>
+        <div id="account-chips" class="account-chips"></div>
+        <p class="field-hint" id="account-summary" style="margin-top:4px"></p>
       </div>
       <div class="row">
         <div class="field" style="flex:1">
@@ -156,13 +157,13 @@
     // draft persistence: route() rebuilds this page on every navigation, so
     // the compose state lives in localStorage and is restored on init
     const DRAFT_KEY = 'blastwa.draft.sending';
-    const draftFields = ['msg-body', 'caption', 'account-select', 'delay-min',
+    const draftFields = ['msg-body', 'caption', 'delay-min',
       'delay-max', 'human-preset', 'safe-mode', 'schedule-at', 'blind-mode',
       'schedule-enabled'];
     let attachmentPath = null;
 
     function saveDraft() {
-      const d = { attachmentPath };
+      const d = { attachmentPath, selectedAccounts: selectedAccountNames() };
       for (const id of draftFields) {
         d[id] = $(id).type === 'checkbox' ? $(id).checked : $(id).value;
       }
@@ -182,6 +183,11 @@
       attachmentPath = d.attachmentPath || null;
       if (attachmentPath) {
         $('attachment-name').textContent = attachmentPath.split(/[\/]/).pop();
+      }
+      // chips render after list_accounts resolves; stash the saved selection
+      // so renderAccountChips can re-apply it
+      if (Array.isArray(d.selectedAccounts)) {
+        savedSelection = d.selectedAccounts.filter((n) => typeof n === 'string');
       }
     }
 
@@ -367,17 +373,25 @@
       }).catch(() => {});
     });
 
+    // account chips: a native multi-select hides status and demands
+    // ctrl-click, which nobody discovers. chips show connection state and
+    // toggle on plain click; selection lives in a Set, not the dom.
+    // declared before the init body reaches renderAccountChips below.
+    const selectedAccounts = new Set();
+    let accountList = [];
+    let savedSelection = [];
+
+    function selectedAccountNames() {
+      return Array.from(selectedAccounts);
+    }
+
     const contacts = await invoke('get_contacts');
     const count = Array.isArray(contacts) ? contacts.length : (contacts.count ?? 0);
     $('contact-count').innerHTML = `<b>${count}</b> contacts loaded`;
 
     const accounts = await invoke('list_accounts');
     const list = Array.isArray(accounts) ? accounts : [];
-    if (list.length) {
-      $('account-select').innerHTML = list
-        .map((a) => `<option value="${a.name}">${a.name}</option>`)
-        .join('');
-    }
+    renderAccountChips(list);
 
     restoreDraft();
     // restoreDraft may have flipped the checkbox: re-sync the picker
@@ -433,9 +447,61 @@
       $('catalog-fields').style.display = imode.value === 'catalog' ? '' : 'none';
     });
 
+    function renderAccountChips(list) {
+      accountList = list;
+      const wrap = $('account-chips');
+      if (!list.length) {
+        wrap.innerHTML = '<p class="field-hint" style="margin:0">No accounts yet. Add one from the Dashboard first.</p>';
+        updateAccountSummary();
+        return;
+      }
+      // re-apply the saved draft selection once, on first render
+      if (savedSelection.length) {
+        for (const name of savedSelection) {
+          if (list.some((a) => a.name === name)) selectedAccounts.add(name);
+        }
+        savedSelection = [];
+      }
+      // drop selections for accounts that no longer exist
+      for (const name of Array.from(selectedAccounts)) {
+        if (!list.some((a) => a.name === name)) selectedAccounts.delete(name);
+      }
+      wrap.innerHTML = list.map((a) => {
+        const on = selectedAccounts.has(a.name);
+        const dot = a.connected ? 'green' : (a.browser_running ? 'amber' : 'gray');
+        const state = a.connected ? `Connected · ${a.number || ''}` : (a.browser_running ? 'Browser open · not scanned' : 'Offline');
+        return `
+          <button type="button" class="account-chip${on ? ' selected' : ''}" data-account="${a.name}" title="${state}">
+            <span class="chip-dot ${dot}"></span>
+            <span class="chip-name">${a.name}</span>
+            <span class="chip-state">${state}</span>
+            <span class="chip-check">${on ? '✓' : ''}</span>
+          </button>`;
+      }).join('');
+      updateAccountSummary();
+    }
+
+    function updateAccountSummary() {
+      const n = selectedAccounts.size;
+      $('account-summary').textContent = n
+        ? `${n} account${n === 1 ? '' : 's'} selected`
+        : 'Nothing selected — the first connected account will be used.';
+    }
+
+    $('account-chips').addEventListener('click', (ev) => {
+      const chip = ev.target.closest('.account-chip');
+      if (!chip) return;
+      const name = chip.dataset.account;
+      if (selectedAccounts.has(name)) selectedAccounts.delete(name);
+      else selectedAccounts.add(name);
+      chip.classList.toggle('selected', selectedAccounts.has(name));
+      chip.querySelector('.chip-check').textContent = selectedAccounts.has(name) ? '✓' : '';
+      updateAccountSummary();
+      saveDraft();
+    });
+
     $('btn-fetch-catalog').addEventListener('click', async () => {
-      const acct = Array.from($('account-select').selectedOptions)
-        .map((o) => o.value).filter(Boolean)[0];
+      const acct = selectedAccountNames()[0];
       if (!acct) {
         $('catalog-status').textContent = 'Select an account first.';
         return;
@@ -495,8 +561,7 @@
         }
         // a hidden picker never schedules, even if it still holds a value
         const scheduleRaw = $('schedule-enabled').checked ? $('schedule-at').value : '';
-        const selected = Array.from($('account-select').selectedOptions)
-          .map((o) => o.value).filter(Boolean);
+        const selected = selectedAccountNames();
         const r = await invoke('start_campaign', {
           message: $('msg-body').value,
           account: selected[0] || '',

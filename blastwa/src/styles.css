@@ -567,6 +567,42 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
 }
 .emoji-pick:hover { background: var(--row-hover); }
 
+/* account chips: clickable cards with live connection state */
+.account-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--table-head-bg);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: border-color .12s, background .12s;
+}
+.account-chip:hover { border-color: var(--primary); }
+.account-chip.selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.chip-dot.green { background: #22a55b; }
+.chip-dot.amber { background: #d99a26; }
+.chip-dot.gray { background: #9aa3ad; }
+.chip-name { font-weight: 600; }
+.chip-state { color: var(--text-dim); font-size: 11px; }
+.chip-check { color: var(--primary); font-weight: 700; min-width: 12px; }
+
 /* small explainer line under panel headers (U5) */
 .panel-note {
   margin-bottom: var(--sp-2);
