@@ -3,7 +3,27 @@
     <h1 class="page-title">Dashboard</h1>
     <p class="page-subtitle">WhatsApp account sessions status</p>
   </div>
-  <button class="btn" onclick="addAccount()">+ Add Account</button>
+  <button class="btn" id="btn-add-account" onclick="openAddAccount()">+ Add Account</button>
+</div>
+
+<!-- add-account modal: native prompt() renders the ugly webview chrome
+     dialog (and has been flaky in tauri webviews), so this is a plain
+     DOM overlay in the same style as the index-level profile launcher -->
+<div class="modal-overlay hidden" id="add-account-modal">
+  <div class="modal-panel">
+    <div class="panel-header"><span>Add Account</span></div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:0">
+        <label for="new-account-name">Account name (letters, numbers, underscore, dash)</label>
+        <input type="text" id="new-account-name" maxlength="64" placeholder="e.g. tokoku" />
+      </div>
+      <p class="modal-error hidden" id="add-account-error"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btn-add-cancel">Cancel</button>
+      <button class="btn" id="btn-add-confirm">Add</button>
+    </div>
+  </div>
 </div>
 
 <div class="panel">
@@ -84,6 +104,10 @@
               onclick="openAccountBrowser('${esc(a.name)}')">
               Open Browser
             </button>
+            <button class="btn btn-sm icon-btn" title="Rename account" aria-label="Rename account"
+              onclick="startRename('${esc(a.name)}', this)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"/><path fill="currentColor" fill-rule="evenodd" d="M15.137 3.47a.75.75 0 0 0-1.06 0l-9.193 9.192a.75.75 0 0 0-.195.34l-1 3.83a.75.75 0 0 0 .915.915l3.828-1a.75.75 0 0 0 .341-.196l9.192-9.192a.75.75 0 0 0 0-1.06zM6.088 13.579l8.519-8.518l1.767 1.767l-8.518 8.519l-2.393.625z" clip-rule="evenodd"/><path fill="currentColor" d="M4 19.25a.75.75 0 0 0 0 1.5h15a.75.75 0 0 0 0-1.5z"/></svg>
+            </button>
             <button class="btn btn-sm btn-danger"
               onclick="removeAccount('${esc(a.name)}')">
               Remove
@@ -98,22 +122,152 @@
     }
   }
 
+  // add-account modal state lives on window because page scripts re-execute
+  // per navigation; the document-level keydown listener is registered once
+  // and cleaned up via addCleanup so it never stacks across visits
+  var addModalBusy = false;
+
+  function showAddError(msg) {
+    var el = document.getElementById('add-account-error');
+    el.textContent = msg;
+    el.classList.toggle('hidden', !msg);
+  }
+
+  function closeAddModal() {
+    document.getElementById('add-account-modal').classList.add('hidden');
+    showAddError('');
+    addModalBusy = false;
+    var trigger = document.getElementById('btn-add-account');
+    if (trigger) trigger.focus();
+  }
+
+  window.openAddAccount = function () {
+    var modal = document.getElementById('add-account-modal');
+    if (!modal) return;
+    document.getElementById('new-account-name').value = '';
+    showAddError('');
+    modal.classList.remove('hidden');
+    document.getElementById('new-account-name').focus();
+  };
+
   window.addAccount = async function () {
-    const name = prompt('Account name:');
-    if (name === null) return; // cancelled
-    const trimmed = name.trim();
-    if (!trimmed) {
-      alert('Account name is required.');
+    if (addModalBusy) return;
+    var input = document.getElementById('new-account-name');
+    var name = input.value.trim();
+    if (!name) {
+      showAddError('Account name is required.');
+      input.focus();
       return;
     }
+    if (name.length > 64) {
+      showAddError('Account name is too long (max 64 characters).');
+      return;
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+      showAddError('Only letters, numbers, underscore and dash are allowed.');
+      return;
+    }
+    // client-side duplicate guard: the backend save silently no-ops on
+    // duplicates, so the error would never come back from the invoke
+    var accounts = await window.blastwa.invoke('list_accounts');
+    var existing = Array.isArray(accounts) ? accounts : (accounts.accounts || []);
+    if (existing.some(function (a) { return a.name === name; })) {
+      showAddError('An account named ' + name + ' already exists.');
+      return;
+    }
+
+    addModalBusy = true;
+    document.getElementById('btn-add-confirm').disabled = true;
     try {
-      const res = await window.blastwa.invoke('add_account', { name: trimmed });
+      const res = await window.blastwa.invoke('add_account', { name: name });
+      closeAddModal();
       // account is saved either way; surface session warnings honestly
       if (res && res.warning) alert(res.warning);
     } catch (e) {
-      alert('Failed to add account: ' + formatError(e));
+      showAddError('Failed to add account: ' + formatError(e));
+    } finally {
+      addModalBusy = false;
+      var confirmBtn = document.getElementById('btn-add-confirm');
+      if (confirmBtn) confirmBtn.disabled = false;
     }
     await renderAccounts();
+  };
+
+  (function wireAddModal() {
+    var modal = document.getElementById('add-account-modal');
+    if (!modal || modal.dataset.wired) return;
+    modal.dataset.wired = '1';
+    document.getElementById('btn-add-cancel').onclick = closeAddModal;
+    document.getElementById('btn-add-confirm').onclick = function () { window.addAccount(); };
+    modal.addEventListener('click', function (ev) {
+      if (ev.target === modal) closeAddModal();
+    });
+    document.getElementById('new-account-name').onkeydown = function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); window.addAccount(); }
+    };
+    // escape-to-cancel on a document-level listener; addCleanup removes it
+    // on navigation so repeated dashboard visits never stack handlers
+    var onKey = function (ev) {
+      if (ev.key === 'Escape' && !modal.classList.contains('hidden')) closeAddModal();
+    };
+    document.addEventListener('keydown', onKey);
+    window.blastwa.addCleanup(function () {
+      document.removeEventListener('keydown', onKey);
+    });
+  })();
+
+  // inline rename: swaps the name cell for an input (prompt() is dead in
+  // tauri's webview). enter saves, escape cancels, clicking away cancels.
+  window.startRename = function (oldName, btn) {
+    const row = btn.closest('tr');
+    const nameCell = row.cells[1];
+    if (nameCell.dataset.renaming) return;
+    nameCell.dataset.renaming = '1';
+    const original = nameCell.innerHTML;
+
+    nameCell.innerHTML = `
+      <span class="rename-row">
+        <input type="text" class="rename-input" value="${esc(oldName)}" maxlength="64" />
+        <button class="btn btn-sm icon-btn" title="Save" aria-label="Save rename">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" clip-rule="evenodd"/></svg>
+        </button>
+        <button class="btn btn-sm icon-btn" title="Cancel" aria-label="Cancel rename">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"/></svg>
+        </button>
+      </span>`;
+    const input = nameCell.querySelector('.rename-input');
+    const [saveBtn, cancelBtn] = nameCell.querySelectorAll('.icon-btn');
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      delete nameCell.dataset.renaming;
+      nameCell.innerHTML = original;
+    };
+
+    const save = async () => {
+      const newName = input.value.trim();
+      if (!newName || newName === oldName) { finish(); return; }
+      try {
+        await window.blastwa.invoke('rename_account', { oldName, newName });
+        done = true;
+        await renderAccounts();
+      } catch (e) {
+        alert('Rename failed: ' + formatError(e));
+        finish();
+      }
+    };
+
+    saveBtn.onclick = (ev) => { ev.stopPropagation(); save(); };
+    cancelBtn.onclick = (ev) => { ev.stopPropagation(); finish(); };
+    input.onkeydown = (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); save(); }
+      if (ev.key === 'Escape') finish();
+    };
+    input.onblur = () => setTimeout(finish, 150); // grace so button clicks land first
   };
 
   window.openAccountBrowser = async function (name) {

@@ -25,8 +25,9 @@ function makeWindow() {
     addEventListener() {}, removeEventListener() {},
     querySelectorAll: () => [], querySelector: () => null,
     innerHTML: '', textContent: '', value: '', checked: false,
-    style: {}, classList: { add() {}, remove() {}, toggle() {} },
+    style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} },
     appendChild() {}, remove() {}, insertAdjacentHTML() {}, click() {},
+    focus() {}, select() {}, disabled: false,
     children: [],
   });
   const win = {
