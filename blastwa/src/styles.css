@@ -522,14 +522,38 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
 .fmt-sep { width: 1px; height: 16px; background: var(--border-light); margin: 0 var(--sp-1); }
 
 .emoji-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1);
-  padding: var(--sp-2);
   margin-bottom: var(--sp-1);
   background: var(--table-head-bg);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.emoji-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 0;
+  background: var(--table-head-bg);
+  z-index: 1;
+}
+.emoji-tab {
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: var(--radius);
+}
+.emoji-tab.active { background: var(--primary); filter: brightness(1.2); }
+.emoji-tab:hover { background: var(--row-hover); }
+.emoji-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
 }
 
 .emoji-pick {
