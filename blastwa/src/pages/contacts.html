@@ -37,7 +37,7 @@
     <span class="panel-menu">&#9776;</span>
   </div>
   <div class="panel-body flush">
-    <div class="table-wrap">
+    <div class="table-wrap" id="contacts-table-wrap">
       <table>
         <thead>
           <tr>
@@ -52,6 +52,11 @@
     </div>
     <div class="counts-bar">
       <span>Total: <b id="total-count">0</b></span>
+      <span class="row-slider">
+        <label for="rows-visible">Rows shown:</label>
+        <input type="range" id="rows-visible" min="5" max="40" step="5" value="15" />
+        <b id="rows-visible-label">15</b>
+      </span>
     </div>
   </div>
 </div>
@@ -65,10 +70,10 @@
     <div class="flex-between">
       <div class="row">
         <select id="check-account" style="width:180px"><option value="">Default</option></select>
-        <button class="btn btn-sm" id="btn-run-check">Run Check</button>
-        <button class="btn btn-sm" id="btn-keep-valid" disabled>Keep Valid Only</button>
-        <button class="btn btn-sm" id="btn-export-valid" disabled>Export CSV (valid)</button>
-        <button class="btn btn-sm btn-secondary" id="btn-clear-check">Clear Results</button>
+        <button class="btn" id="btn-run-check">Run Check</button>
+        <button class="btn" id="btn-keep-valid" disabled>Keep Valid Only</button>
+        <button class="btn" id="btn-export-valid" disabled>Export CSV (valid)</button>
+        <button class="btn btn-secondary" id="btn-clear-check">Clear Results</button>
       </div>
       <span id="check-summary" style="font-size:11px;color:var(--text-dim)"></span>
     </div>
@@ -106,8 +111,8 @@
           <option value="13" selected>13 digits total</option>
           <option value="14">14 digits total</option>
         </select>
-        <button class="btn btn-sm" id="btn-generate">Generate</button>
-        <button class="btn btn-sm" id="btn-gen-export">Export CSV</button>
+        <button class="btn" id="btn-generate">Generate</button>
+        <button class="btn" id="btn-gen-export">Export CSV</button>
       </div>
     </div>
     <p id="gen-preview" class="field-hint" style="margin-top:8px"></p>
@@ -422,6 +427,34 @@
   // because scripts re-execute per navigation and top-level const would
   // throw 'already declared' on the second visit
   var esc = window.blastwa.esc;
+
+  // rows-visible slider: caps the contact table height so a 100-number
+  // generated batch doesn't push the checker/generator off screen. the
+  // choice persists in localStorage and survives navigation.
+  var ROWS_KEY = 'blastwa.contacts.rowsVisible';
+
+  function applyRowsVisible() {
+    var n = Number(document.getElementById('rows-visible').value) || 15;
+    document.getElementById('rows-visible-label').textContent = n;
+    var wrap = document.getElementById('contacts-table-wrap');
+    var row = wrap.querySelector('#contacts-body tr');
+    var rowH = row ? row.offsetHeight : 29; // measured, with a sane fallback
+    var headH = wrap.querySelector('thead tr') ? wrap.querySelector('thead tr').offsetHeight : 29;
+    wrap.style.maxHeight = (n * rowH + headH + 2) + 'px';
+    try { localStorage.setItem(ROWS_KEY, String(n)); } catch (e) {}
+  }
+
+  (function initRowsSlider() {
+    var slider = document.getElementById('rows-visible');
+    try {
+      var saved = Number(localStorage.getItem(ROWS_KEY));
+      if (saved >= Number(slider.min) && saved <= Number(slider.max)) slider.value = saved;
+    } catch (e) {}
+    document.getElementById('rows-visible-label').textContent = slider.value;
+    slider.addEventListener('input', applyRowsVisible);
+    // apply after the first paint so a real row height is measurable
+    requestAnimationFrame(applyRowsVisible);
+  })();
 
   async function refresh() {
     const { invoke } = window.blastwa;
