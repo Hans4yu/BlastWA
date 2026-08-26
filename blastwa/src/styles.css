@@ -268,13 +268,19 @@ tbody tr:last-child td { border-bottom: none; }
 .counts-bar > button { margin: 0; }
 
 /* rows-shown slider lives in the contacts counts bar */
+.row-slider { gap: 10px; }
 .row-slider input[type="range"] {
   width: 110px;
-  height: auto;
+  height: 16px;
+  vertical-align: middle;
   accent-color: var(--accent);
   cursor: pointer;
+  margin: 0;
 }
 .row-slider b { min-width: 20px; text-align: center; }
+
+/* footers that carry actions push them to the far edge, away from stat text */
+.counts-bar > .btn:first-of-type { margin-left: auto; }
 
 /* ---------- buttons ---------- */
 .btn {
