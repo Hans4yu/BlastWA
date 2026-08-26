@@ -7,6 +7,7 @@ pub struct ContactRow {
     pub number: String,
     pub fullname: String,
     pub firstname: String,
+    pub middlename: String,
     pub lastname: String,
     pub var1: String,
     pub var2: String,
@@ -22,9 +23,23 @@ impl ContactRow {
             fullname: fullname.to_string(),
             ..Default::default()
         };
-        let mut parts = fullname.splitn(2, ' ');
-        c.firstname = parts.next().unwrap_or("").to_string();
-        c.lastname = parts.next().unwrap_or("").to_string();
+        // first word is the first name, last word is the family name, and
+        // everything between is the middle name. a two-word name therefore
+        // has no middle name, and a single word has neither middle nor last.
+        let words: Vec<&str> = fullname.split_whitespace().collect();
+        match words.len() {
+            0 => {}
+            1 => c.firstname = words[0].to_string(),
+            2 => {
+                c.firstname = words[0].to_string();
+                c.lastname = words[1].to_string();
+            }
+            _ => {
+                c.firstname = words[0].to_string();
+                c.middlename = words[1..words.len() - 1].join(" ");
+                c.lastname = words[words.len() - 1].to_string();
+            }
+        }
         c
     }
 
@@ -39,6 +54,7 @@ pub fn apply_variables(template: &str, contact: &ContactRow) -> String {
     template
         .replace("[[fullname]]", &contact.fullname)
         .replace("[[firstname]]", &contact.firstname)
+        .replace("[[middlename]]", &contact.middlename)
         .replace("[[lastname]]", &contact.lastname)
         .replace("[[VAR1]]", &contact.var1)
         .replace("[[VAR2]]", &contact.var2)
@@ -80,6 +96,39 @@ mod tests {
     }
 
     #[test]
+    fn split_names_three_parts_fills_middle() {
+        let c = ContactRow::from_fullname("62", "Muhammad Rizqy Hidayah");
+        assert_eq!(c.firstname, "Muhammad");
+        assert_eq!(c.middlename, "Rizqy");
+        assert_eq!(c.lastname, "Hidayah");
+    }
+
+    #[test]
+    fn split_names_two_parts_has_no_middle() {
+        let c = ContactRow::from_fullname("62", "Dwi Anggoro");
+        assert_eq!(c.firstname, "Dwi");
+        assert_eq!(c.middlename, "");
+        assert_eq!(c.lastname, "Anggoro");
+    }
+
+    #[test]
+    fn split_names_four_parts_joins_middle() {
+        let c = ContactRow::from_fullname("62", "Haidar Labib Izza Kif");
+        assert_eq!(c.firstname, "Haidar");
+        assert_eq!(c.middlename, "Labib Izza");
+        assert_eq!(c.lastname, "Kif");
+    }
+
+    #[test]
+    fn middlename_placeholder_replaced() {
+        let c = ContactRow::from_fullname("62", "Muhammad Rizqy Hidayah");
+        assert_eq!(
+            apply_variables("[[firstname]]|[[middlename]]|[[lastname]]", &c),
+            "Muhammad|Rizqy|Hidayah"
+        );
+    }
+
+    #[test]
     fn all_placeholders_replaced() {
         let t = "[[firstname]] [[lastname]] aka [[fullname]] v=[[VAR1]] tag=[[randomtag]]";
         let out = apply_variables(t, &sample());
@@ -110,6 +159,7 @@ mod tests {
     fn split_names() {
         let c = ContactRow::from_fullname("62", "Budi Santoso Jaya");
         assert_eq!(c.firstname, "Budi");
-        assert_eq!(c.lastname, "Santoso Jaya");
+        assert_eq!(c.middlename, "Santoso");
+        assert_eq!(c.lastname, "Jaya");
     }
 }

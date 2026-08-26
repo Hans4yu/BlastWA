@@ -13,7 +13,7 @@
     </div>
     <div class="panel-body">
       <div class="field">
-        <label>Message body (supports spintax {a|b}, [[firstname]] variables; separate variants with a --- line for rotation)</label>
+        <label>Message body (supports spintax {a|b}, variables [[firstname]] [[middlename]] [[lastname]] [[fullname]] [[VAR1]]-[[VAR5]] [[randomtag]]; separate variants with a --- line for rotation)</label>
         <div class="fmt-toolbar" id="fmt-toolbar">
           <button type="button" class="fmt-btn fmt-bold" data-wrap="*" title="Bold">B</button>
           <button type="button" class="fmt-btn fmt-italic" data-wrap="_" title="Italic">I</button>
@@ -77,8 +77,11 @@
         <label for="blind-mode">Blind mode (skip all verification for speed; overrides safe mode)</label>
       </div>
       <div class="field" style="margin-bottom:0;margin-top:8px">
-        <label>Schedule (optional: leave empty to send now)</label>
-        <input type="datetime-local" id="schedule-at" />
+        <label class="checkbox-label" style="margin-bottom:6px">
+          <input type="checkbox" id="schedule-enabled" />
+          Schedule this campaign (off = send immediately)
+        </label>
+        <input type="datetime-local" id="schedule-at" class="hidden" />
       </div>
     </div>
   </div>
@@ -152,7 +155,8 @@
     // the compose state lives in localStorage and is restored on init
     const DRAFT_KEY = 'blastwa.draft.sending';
     const draftFields = ['msg-body', 'caption', 'account-select', 'delay-min',
-      'delay-max', 'human-preset', 'safe-mode', 'schedule-at', 'blind-mode'];
+      'delay-max', 'human-preset', 'safe-mode', 'schedule-at', 'blind-mode',
+      'schedule-enabled'];
     let attachmentPath = null;
 
     function saveDraft() {
@@ -183,6 +187,15 @@
       $(id).addEventListener('input', saveDraft);
       $(id).addEventListener('change', saveDraft);
     }
+
+    // the datetime picker only exists while scheduling is on: an empty but
+    // visible field invited "why is nothing scheduled" confusion, and a
+    // stale value must never leak into an immediate send
+    function syncScheduleUi() {
+      $('schedule-at').classList.toggle('hidden', !$('schedule-enabled').checked);
+    }
+    $('schedule-enabled').addEventListener('change', syncScheduleUi);
+    syncScheduleUi();
 
     // formatting toolbar (U4): wraps the current selection in whatsapp
     // formatting tokens, or inserts around an empty cursor. mousedown is
@@ -267,6 +280,8 @@
     }
 
     restoreDraft();
+    // restoreDraft may have flipped the checkbox: re-sync the picker
+    syncScheduleUi();
 
     // progress restore: counters live in the backend, so a tab switch never
     // loses them; last "current number" comes from the session cache
@@ -378,7 +393,8 @@
         } else if (interactive.rows) {
           payloadExtra.listMessage = interactive;
         }
-        const scheduleRaw = $('schedule-at').value;
+        // a hidden picker never schedules, even if it still holds a value
+        const scheduleRaw = $('schedule-enabled').checked ? $('schedule-at').value : '';
         const selected = Array.from($('account-select').selectedOptions)
           .map((o) => o.value).filter(Boolean);
         const r = await invoke('start_campaign', {

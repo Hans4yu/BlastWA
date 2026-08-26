@@ -59,6 +59,7 @@ impl ColumnMapping {
             number,
             fullname: get(&self.fullname_col),
             firstname: String::new(),
+            middlename: String::new(),
             lastname: String::new(),
             var1: get(&self.var1_col),
             var2: get(&self.var2_col),
@@ -69,11 +70,16 @@ impl ColumnMapping {
     }
 }
 
-fn split_names(mut row: ContactRow) -> ContactRow {
-    let mut parts = row.fullname.splitn(2, ' ');
-    row.firstname = parts.next().unwrap_or("").to_string();
-    row.lastname = parts.next().unwrap_or("").to_string();
-    row
+// name splitting lives in ContactRow::from_fullname so importers and the
+// txt loader cannot drift apart on what a middle name is
+fn split_names(row: ContactRow) -> ContactRow {
+    let split = ContactRow::from_fullname(&row.number, &row.fullname);
+    ContactRow {
+        firstname: split.firstname,
+        middlename: split.middlename,
+        lastname: split.lastname,
+        ..row
+    }
 }
 
 /// sniff whether file is csv or xlsx by extension and read accordingly.
