@@ -41,6 +41,8 @@ function makeWindow() {
     console: { log() {}, warn() {}, error() {} },
     alert() {}, prompt() { return 'test'; }, confirm() { return true; },
     setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
+    // contacts.html rows-visible slider measures row height on next frame
+    requestAnimationFrame: (cb) => setTimeout(() => cb(16), 0),
     fetch: async () => { throw new Error('no fetch in test'); },
     __TAURI__: undefined,
     blastwa: {
