@@ -891,6 +891,24 @@ async fn check_numbers_cmd(
     Ok(outcomes)
 }
 
+/// csv of the current send list numbers — the number generator feeds this
+/// list, so exporting it is how a generated batch leaves the app
+#[tauri::command]
+fn export_contacts_csv(path: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    let list = ctx.contacts.lock().unwrap();
+    let mut wtr = csv::Writer::from_path(&path).map_err(|e| e.to_string())?;
+    wtr.write_record(["Number", "Full Name", "Var1", "Var2", "Var3", "Var4", "Var5"])
+        .map_err(|e| e.to_string())?;
+    for c in &list.contacts {
+        wtr.write_record([
+            &c.number, &c.fullname, &c.var1, &c.var2, &c.var3, &c.var4, &c.var5,
+        ])
+        .map_err(|e| e.to_string())?;
+    }
+    wtr.flush().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "ok": true, "exported": list.len() }))
+}
+
 /// keep only the listed (checker-validated) numbers in the send list (U9)
 #[tauri::command]
 fn keep_contacts_only(valid_numbers: Vec<String>, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
@@ -902,11 +920,15 @@ fn keep_contacts_only(valid_numbers: Vec<String>, ctx: State<'_, AppCtx>) -> Res
 
 /// generate candidate numbers under a prefix range into the send list (U18).
 /// output feeds the checker, never straight into a campaign blast.
+/// `total_length` pads the range suffix with leading zeros so every
+/// candidate lands on one exact digit count (11/12/13...): without it a
+/// 0..99 range mixes 12- and 13-digit numbers because 0 renders as "0".
 #[tauri::command]
 fn add_generated_contacts(
     prefix: String,
     range_start: u64,
     range_end: u64,
+    total_length: Option<u32>,
     ctx: State<'_, AppCtx>,
 ) -> Result<serde_json::Value, String> {
     const MAX_RANGE: u64 = 1000;
@@ -920,10 +942,38 @@ fn add_generated_contacts(
     if range_end - range_start + 1 > MAX_RANGE {
         return Err(format!("range too large (max {} per batch)", MAX_RANGE));
     }
+    let pad = match total_length {
+        Some(t) => {
+            let t = t as usize;
+            if t <= digits.len() {
+                return Err(format!(
+                    "target length {} must be longer than the prefix ({} digits)",
+                    t,
+                    digits.len()
+                ));
+            }
+            t - digits.len()
+        }
+        None => 0,
+    };
+    // a padded suffix must actually fit the requested range
+    if pad > 0 {
+        let max_suffix = 10u64.saturating_pow(pad as u32);
+        if range_end >= max_suffix {
+            return Err(format!(
+                "range end {} does not fit in {} suffix digits (max {})",
+                range_end, pad, max_suffix - 1
+            ));
+        }
+    }
     let mut list = ctx.contacts.lock().unwrap();
     let mut added = 0usize;
     for n in range_start..=range_end {
-        let num = format!("{}{}", digits, n);
+        let num = if pad > 0 {
+            format!("{}{:0width$}", digits, n, width = pad)
+        } else {
+            format!("{}{}", digits, n)
+        };
         if list.contacts.iter().any(|c| c.number == num) {
             continue;
         }
@@ -1324,7 +1374,7 @@ fn main() {
             start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
-            keep_contacts_only, add_generated_contacts, export_valid_numbers,
+            keep_contacts_only, add_generated_contacts, export_valid_numbers, export_contacts_csv,
             import_wa_contacts, list_catalog_products,
             load_rules, save_rules,
             list_templates, search_templates, save_template, delete_template,

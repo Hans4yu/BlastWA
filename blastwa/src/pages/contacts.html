@@ -20,7 +20,7 @@
         <button class="btn" onclick="pickAndImport()">Import .txt / .csv / .xlsx</button>
         <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
           style="display:none" onchange="handleImport(this)" />
-        <button class="btn btn-sm" id="btn-import-wa">Import from WhatsApp phonebook</button>
+        <button class="btn" id="btn-import-wa">Import from WhatsApp phonebook</button>
         <select id="wa-account" style="width:150px"><option value="">Default</option></select>
         <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
       </div>
@@ -68,6 +68,7 @@
         <button class="btn btn-sm" id="btn-run-check">Run Check</button>
         <button class="btn btn-sm" id="btn-keep-valid" disabled>Keep Valid Only</button>
         <button class="btn btn-sm" id="btn-export-valid" disabled>Export CSV (valid)</button>
+        <button class="btn btn-sm btn-secondary" id="btn-clear-check">Clear Results</button>
       </div>
       <span id="check-summary" style="font-size:11px;color:var(--text-dim)"></span>
     </div>
@@ -92,15 +93,24 @@
     <span class="panel-menu">&#9776;</span>
   </div>
   <div class="panel-body">
+    <p class="panel-note">Creates number candidates to run through the checker — it never sends anything. Example: prefix <b>62821321020</b>, range 0–99, target 13 digits → <b>62821321020<b>00</b>…<b>99</b></b> (suffix padded with zeros).</p>
     <div class="flex-between">
       <div class="row">
-        <input type="text" id="gen-prefix" placeholder="prefix, e.g. 6281234" style="width:160px" maxlength="15" />
+        <input type="text" id="gen-prefix" placeholder="prefix, e.g. 6281234" style="width:170px" maxlength="15" />
         <input type="number" id="gen-start" placeholder="from" style="width:90px" min="0" value="0" />
         <input type="number" id="gen-end" placeholder="to" style="width:90px" min="0" value="99" />
+        <select id="gen-length" style="width:150px" title="Total number length — the range suffix is zero-padded to hit it exactly">
+          <option value="">auto (no padding)</option>
+          <option value="11">11 digits total</option>
+          <option value="12">12 digits total</option>
+          <option value="13" selected>13 digits total</option>
+          <option value="14">14 digits total</option>
+        </select>
         <button class="btn btn-sm" id="btn-generate">Generate</button>
+        <button class="btn btn-sm" id="btn-gen-export">Export CSV</button>
       </div>
-      <span style="font-size:11px;color:var(--text-dim)">max 1000 per batch; always run the checker before blasting</span>
     </div>
+    <p id="gen-preview" class="field-hint" style="margin-top:8px"></p>
     <p id="gen-status" style="margin:8px 0 0;color:var(--text-dim);font-size:11px"></p>
   </div>
 </div>
@@ -110,24 +120,77 @@
     const { invoke, listen, addCleanup } = window.blastwa;
     await refresh();
 
+    // generator: live preview of the first/last candidate so the padding
+    // behavior is visible before committing, plus a csv export of the list
+    const genEls = {
+      prefix: document.getElementById('gen-prefix'),
+      start: document.getElementById('gen-start'),
+      end: document.getElementById('gen-end'),
+      length: document.getElementById('gen-length'),
+      preview: document.getElementById('gen-preview'),
+      status: document.getElementById('gen-status'),
+    };
+
+    function genPreview() {
+      const digits = (genEls.prefix.value || '').replace(/\D/g, '');
+      const start = Number(genEls.start.value) || 0;
+      const end = Number(genEls.end.value) || 0;
+      const total = Number(genEls.length.value) || 0;
+      if (!digits) { genEls.preview.textContent = ''; return; }
+      const pad = total > digits.length ? total - digits.length : 0;
+      const first = pad ? digits + String(start).padStart(pad, '0') : digits + start;
+      const last = pad ? digits + String(end).padStart(pad, '0') : digits + end;
+      genEls.preview.textContent =
+        `First: ${first} · Last: ${last} · ${first.length} digits each` +
+        (end < start ? ' — range end is below range start!' : '');
+    }
+    for (const el of [genEls.prefix, genEls.start, genEls.end, genEls.length]) {
+      el.addEventListener('input', genPreview);
+      el.addEventListener('change', genPreview);
+    }
+    genPreview();
+
     document.getElementById('btn-generate').addEventListener('click', async () => {
-      const prefix = document.getElementById('gen-prefix').value.trim();
-      const start = Number(document.getElementById('gen-start').value);
-      const end = Number(document.getElementById('gen-end').value);
-      const status = document.getElementById('gen-status');
+      const prefix = genEls.prefix.value.trim();
+      const start = Number(genEls.start.value);
+      const end = Number(genEls.end.value);
+      const totalRaw = genEls.length.value;
+      const totalLength = totalRaw ? Number(totalRaw) : null;
+      const status = genEls.status;
       if (!prefix) {
         status.textContent = 'Prefix is required.';
         return;
       }
       try {
         const r = await invoke('add_generated_contacts', {
-          prefix, rangeStart: start, rangeEnd: end,
+          prefix, rangeStart: start, rangeEnd: end, totalLength,
         });
         status.textContent =
           'Generated ' + ((r && r.added) ?? 0) + ' candidates. Run the checker and Keep Valid Only before blasting.';
         await refresh();
       } catch (e) {
         status.textContent = 'Generate failed: ' + (e && e.message ? e.message : e);
+      }
+    });
+
+    // exports the current send list (what the generator feeds into) as csv
+    document.getElementById('btn-gen-export').addEventListener('click', async () => {
+      const tauriDialog = window.__TAURI__ && window.__TAURI__.dialog;
+      if (!tauriDialog || !tauriDialog.save) {
+        alert('[mock] would export the send list as csv (browser dev mode)');
+        return;
+      }
+      try {
+        const path = await tauriDialog.save({
+          title: 'Export send list',
+          defaultPath: window.blastwa.stampName('blastwa-numbers', 'csv'),
+          filters: [{ name: 'CSV', extensions: ['csv'] }],
+        });
+        if (!path) return;
+        const r = await invoke('export_contacts_csv', { path });
+        alert('Exported ' + ((r && r.exported) ?? 0) + ' numbers to ' + path);
+      } catch (e) {
+        alert('Export failed: ' + (e && e.message ? e.message : e));
       }
     });
 
@@ -278,7 +341,15 @@
       if (!confirm(`Keep only the ${validNumbers.length} valid numbers and drop the rest?`)) return;
       try {
         const r = await invoke('keep_contacts_only', { validNumbers });
-        alert('Send list now holds ' + ((r && r.kept) ?? 0) + ' valid contacts.');
+        const kept = (r && r.kept) ?? 0;
+        if (!kept) {
+          // valid numbers from a stale check match none of the current list:
+          // refusing here prevents wiping the whole send list
+          alert('None of the checked numbers are in the current send list. ' +
+            'The list was NOT changed — run a fresh check first.');
+          return;
+        }
+        alert('Send list now holds ' + kept + ' valid contacts.');
         await refresh();
         lastOutcomes = [];
         document.getElementById('check-body').innerHTML = '';
@@ -290,6 +361,20 @@
       } catch (e) {
         alert('Filter failed: ' + (e && e.message ? e.message : e));
       }
+    });
+
+    // wipes the results table, cache and button states without touching the
+    // send list — purely a view reset
+    document.getElementById('btn-clear-check').addEventListener('click', () => {
+      if (!lastOutcomes.length && !document.getElementById('check-body').children.length) return;
+      lastOutcomes = [];
+      validNumbers = [];
+      document.getElementById('check-body').innerHTML = '';
+      document.getElementById('check-empty').style.display = '';
+      document.getElementById('btn-keep-valid').disabled = true;
+      document.getElementById('btn-export-valid').disabled = true;
+      document.getElementById('check-summary').textContent = '';
+      clearCheckCache();
     });
 
     // csv holds only the rows that answered yes — that is what this button
