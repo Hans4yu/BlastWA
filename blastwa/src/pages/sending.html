@@ -202,15 +202,24 @@
     // prevented so the textarea never loses focus or its live selection.
     const msgBody = $('msg-body');
 
+    // insert text at the current cursor/selection using execCommand so the
+    // browser's native undo stack (Ctrl+Z / Ctrl+Y) stays intact. direct
+    // .value assignment kills it because the textarea never saw an input event.
+    function insertText(text) {
+      msgBody.focus();
+      document.execCommand('insertText', false, text);
+      saveDraft();
+    }
+
     function insertAroundToken(token) {
       const start = msgBody.selectionStart ?? msgBody.value.length;
       const end = msgBody.selectionEnd ?? start;
       const sel = msgBody.value.slice(start, end);
-      msgBody.value =
-        msgBody.value.slice(0, start) + token + sel + token + msgBody.value.slice(end);
+      msgBody.focus();
+      // replace the selection (or insert at cursor) with token+sel+token
+      document.execCommand('insertText', false, token + sel + token);
       // cursor lands right after the wrapped content
       const caret = start + token.length + sel.length + token.length;
-      msgBody.focus();
       msgBody.setSelectionRange(caret, caret);
       saveDraft();
     }
@@ -332,13 +341,8 @@
       const pick = ev.target.closest('.emoji-pick');
       if (!pick) return;
       const em = pick.dataset.emoji;
-      const pos = msgBody.selectionStart ?? msgBody.value.length;
-      const end = msgBody.selectionEnd ?? pos;
-      msgBody.value =
-        msgBody.value.slice(0, pos) + em + msgBody.value.slice(end);
-      const caret = pos + em.length;
       msgBody.focus();
-      msgBody.setSelectionRange(caret, caret);
+      document.execCommand('insertText', false, em);
       saveDraft();
     });
 
