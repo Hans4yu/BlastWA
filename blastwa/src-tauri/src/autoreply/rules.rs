@@ -27,8 +27,15 @@ pub struct Rule {
     pub keyword: String,
     #[serde(default)]
     pub reply_message: Option<String>,
-    #[serde(default)]
+    /// rules are enabled unless explicitly disabled: a bool with plain
+    /// `#[serde(default)]` deserializes to false, which silently disabled
+    /// every rule whose json predates this field
+    #[serde(default = "default_true")]
     pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// first matching enabled rule wins — mirrors original behavior
@@ -60,6 +67,35 @@ mod tests {
             reply_message: Some("reply".into()),
             enabled: true,
         }
+    }
+
+    #[test]
+    fn disabled_rule_never_matches() {
+        let mut r = rule(MatchType::Contains, "promo");
+        r.enabled = false;
+        assert!(match_rule("ada promo?", &[r]).is_none());
+    }
+
+    #[test]
+    fn enabled_defaults_to_true_when_absent_from_json() {
+        // a rule file written before `enabled` existed must not load as a
+        // silently disabled rule
+        let parsed: Vec<Rule> = serde_json::from_str(
+            r#"[{"name":"legacy","match_type":"Contains","keyword":"promo"}]"#,
+        )
+        .expect("legacy rule json should parse");
+        assert!(parsed[0].enabled);
+        assert!(match_rule("ada promo?", &parsed).is_some());
+    }
+
+    #[test]
+    fn explicit_false_still_disables() {
+        let parsed: Vec<Rule> = serde_json::from_str(
+            r#"[{"name":"off","match_type":"Contains","keyword":"promo","enabled":false}]"#,
+        )
+        .unwrap();
+        assert!(!parsed[0].enabled);
+        assert!(match_rule("ada promo?", &parsed).is_none());
     }
 
     #[test]

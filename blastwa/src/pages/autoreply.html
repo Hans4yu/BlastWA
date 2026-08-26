@@ -3,7 +3,21 @@
     <h1 class="page-title">Auto Reply</h1>
     <p class="page-subtitle">Keyword-based auto responder rules</p>
   </div>
-  <button class="btn" onclick="addRuleRow()">+ Add Rule</button>
+  <div class="row">
+    <button class="btn btn-secondary" onclick="addRuleRow()">+ Add Rule</button>
+    <button class="btn" id="btn-save-rules">Save Rules</button>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-body" style="padding-top:10px;padding-bottom:10px">
+    <p class="panel-note" style="margin:0">
+      <b>Rules are stored but not yet answering.</b> The incoming-message
+      watcher that fires these replies is not implemented yet, so nothing is
+      sent automatically. Saved rules are kept and will start working as soon
+      as the watcher ships.
+    </p>
+  </div>
 </div>
 
 <div class="panel">
@@ -30,6 +44,7 @@
     </div>
     <div class="counts-bar">
       <span>Rules: <b id="rules-count">0</b></span>
+      <span id="rules-status" style="font-size:11px;color:var(--text-dim)"></span>
     </div>
   </div>
 </div>
@@ -70,6 +85,57 @@
       $('rules-count').textContent = $('rules-body').children.length;
     }
 
+    // route() rebuilds this page on every navigation, so unsaved rows are
+    // gone the moment the user switches tabs. read the rows back out and
+    // persist them through save_rules instead of trusting the dom.
+    function collectRules() {
+      return Array.from($('rules-body').children).map((tr) => ({
+        name: tr.querySelector('.r-name').value.trim(),
+        match_type: matchTypeToBackend(tr.querySelector('.r-match').value),
+        keyword: tr.querySelector('.r-keyword').value.trim(),
+        reply_message: tr.querySelector('.r-reply').value,
+        enabled: tr.querySelector('.r-enabled').checked,
+      })).filter((r) => r.keyword);
+    }
+
+    // the rust enum is a plain externally-tagged unit variant, so the wire
+    // form is PascalCase, not the snake_case used by the select values
+    function matchTypeToBackend(v) {
+      return ({
+        contains: 'Contains', like: 'Like',
+        start_with: 'StartWith', end_with: 'EndWith',
+      })[v] || 'Contains';
+    }
+    function matchTypeToUi(v) {
+      return ({
+        Contains: 'contains', Like: 'like',
+        StartWith: 'start_with', EndWith: 'end_with',
+      })[v] || 'contains';
+    }
+
+    function setStatus(msg) {
+      $('rules-status').textContent = msg || '';
+    }
+
+    $('btn-save-rules').addEventListener('click', async () => {
+      const btn = $('btn-save-rules');
+      const rules = collectRules();
+      const dropped = $('rules-body').children.length - rules.length;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        await invoke('save_rules', { rules });
+        setStatus(`saved ${rules.length} rule${rules.length === 1 ? '' : 's'}` +
+          (dropped ? ` · ${dropped} row(s) skipped: keyword is required` : ''));
+      } catch (e) {
+        setStatus('');
+        alert('Save failed: ' + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Rules';
+      }
+    });
+
     const res = await invoke('load_rules');
     const rules = Array.isArray(res) ? res : [];
     rules.forEach((r) => {
@@ -77,11 +143,11 @@
       const last = $('rules-body').lastElementChild;
       last.querySelector('.r-enabled').checked = r.enabled ?? true;
       last.querySelector('.r-name').value = r.name || '';
-      last.querySelector('.r-match').value =
-        (r.match_type || 'contains').toLowerCase();
+      last.querySelector('.r-match').value = matchTypeToUi(r.match_type);
       last.querySelector('.r-keyword').value = r.keyword || '';
       last.querySelector('.r-reply').value = r.reply_message || '';
     });
     syncEmpty();
+    if (rules.length) setStatus(`${rules.length} saved rule(s) loaded`);
   };
 </script>
