@@ -1011,12 +1011,36 @@ fn search_templates(query: String, ctx: State<'_, AppCtx>) -> Result<Vec<Message
 
 #[tauri::command]
 fn save_template(
+    id: Option<String>,
     name: String,
     tags: Option<Vec<String>>,
     body: String,
     attachment_path: Option<String>,
     ctx: State<'_, AppCtx>,
 ) -> Result<MessageTemplate, String> {
+    // an id means "edit this one": creating instead would leave the original
+    // behind and duplicate the row
+    if let Some(raw) = id.filter(|s| !s.is_empty()) {
+        let uuid = uuid::Uuid::parse_str(&raw).map_err(|e| format!("bad template id: {e}"))?;
+        let existing = ctx
+            .templates
+            .list()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|t| t.id == uuid)
+            .ok_or_else(|| format!("template {raw} not found"))?;
+        let updated = MessageTemplate {
+            name,
+            tags: tags.unwrap_or_default(),
+            body,
+            attachment_path,
+            ..existing
+        };
+        ctx.templates
+            .update(updated.clone())
+            .map_err(|e| e.to_string())?;
+        return Ok(updated);
+    }
     ctx.templates
         .create(name, tags.unwrap_or_default(), body, attachment_path)
         .map_err(|e| e.to_string())

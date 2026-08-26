@@ -60,6 +60,19 @@
     await refresh();
   };
 
+  // "load to composer" is a frontend concern: the sending page restores its
+  // state from this same localStorage draft on init, so writing the draft is
+  // all it takes. there is no rust command for it.
+  function loadToComposer(tpl) {
+    const DRAFT_KEY = 'blastwa.draft.sending';
+    let d = {};
+    try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}') || {}; } catch (e) { d = {}; }
+    d['msg-body'] = tpl.body || '';
+    if (tpl.attachment_path) d.attachmentPath = tpl.attachment_path;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}
+    location.hash = '#/sending';
+  }
+
   // shared esc() from window.blastwa (hoisted in main.js); var, not const,
   // because scripts re-execute per navigation and top-level const would
   // throw 'already declared' on the second visit
@@ -75,22 +88,40 @@
     $('tpl-count').textContent = tpls.length;
     $('tpl-empty').style.display = tpls.length ? 'none' : '';
 
+    // keep the row objects addressable so the action buttons can hand a real
+    // template to js instead of smuggling it through an html attribute
+    window.__tplById = {};
+    for (const t of tpls) window.__tplById[t.id] = t;
+
     $('tpl-body-rows').innerHTML = tpls.map((t) => `
       <tr>
         <td><b>${esc(t.name)}</b></td>
         <td>${(t.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</td>
         <td style="white-space:normal;max-width:420px">${esc(String(t.body || '').slice(0, 100))}${String(t.body).length > 100 ? '...' : ''}</td>
         <td>
-          <button class="btn btn-sm btn-secondary"
-            onclick='window.blastwa.invoke("load_to_composer", ${JSON.stringify(JSON.stringify(t))}).then(()=>location.hash="#/sending")'>
-            Load to Composer
-          </button>
-          <button class="btn btn-sm btn-danger"
-            onclick="window.blastwa.invoke('delete_template', { id: '${t.id}' }).then(refresh)">
-            Delete
-          </button>
+          <button class="btn btn-sm btn-secondary" data-act="load" data-id="${esc(t.id)}">Load to Composer</button>
+          <button class="btn btn-sm" data-act="edit" data-id="${esc(t.id)}">Edit</button>
+          <button class="btn btn-sm btn-danger" data-act="del" data-id="${esc(t.id)}">Delete</button>
         </td>
       </tr>`).join('');
+
+    $('tpl-body-rows').querySelectorAll('button[data-act]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const tpl = window.__tplById[btn.dataset.id];
+        if (!tpl) return;
+        if (btn.dataset.act === 'load') loadToComposer(tpl);
+        else if (btn.dataset.act === 'edit') openEditTpl(tpl);
+        else if (btn.dataset.act === 'del') {
+          if (!confirm(`Delete template "${tpl.name}"?`)) return;
+          try {
+            await invoke('delete_template', { id: tpl.id });
+            await refresh();
+          } catch (e) {
+            alert('Delete failed: ' + (e && e.message ? e.message : e));
+          }
+        }
+      });
+    });
   }
 
   function openNewTpl() {
@@ -102,20 +133,40 @@
     document.getElementById('tpl-editor').style.display = '';
   }
 
+  function openEditTpl(tpl) {
+    editingId = tpl.id;
+    document.getElementById('tpl-editor-title').textContent = 'Edit Template';
+    document.getElementById('tpl-name').value = tpl.name || '';
+    document.getElementById('tpl-tags').value = (tpl.tags || []).join(', ');
+    document.getElementById('tpl-body').value = tpl.body || '';
+    document.getElementById('tpl-editor').style.display = '';
+  }
+
   function closeEditor() {
     document.getElementById('tpl-editor').style.display = 'none';
   }
 
   async function saveTpl() {
     const { invoke } = window.blastwa;
+    const name = document.getElementById('tpl-name').value.trim();
+    if (!name) {
+      alert('Template name is required.');
+      return;
+    }
     const payload = {
       id: editingId,
-      name: document.getElementById('tpl-name').value,
+      name,
       tags: document.getElementById('tpl-tags').value.split(',').map(s => s.trim()).filter(Boolean),
       body: document.getElementById('tpl-body').value,
     };
-    await invoke('save_template', payload);
+    try {
+      await invoke('save_template', payload);
+    } catch (e) {
+      alert('Save failed: ' + (e && e.message ? e.message : e));
+      return;
+    }
+    editingId = null;
     closeEditor();
-    refresh();
+    await refresh();
   }
 </script>
