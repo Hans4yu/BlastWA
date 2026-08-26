@@ -94,6 +94,7 @@ async function navigate(state) {
     console: { log() {}, warn() {}, error() {} },
     alert() {}, confirm: () => state.confirm !== false, prompt: () => '',
     setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (cb) => setTimeout(() => cb(16), 0),
     Event: class { constructor(t) { this.type = t; } },
     __TAURI__: undefined,
     blastwa: {

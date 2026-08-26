@@ -310,6 +310,14 @@ async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json:
 
     if let Some(p) = port {
         register_live_session(&name, p).await;
+        // the user may have removed this account while its session was still
+        // launching — a finished launch must not resurrect a removed identity
+        let app_dir = AppConfig::app_dir();
+        if !server::load_saved_accounts(&app_dir).iter().any(|n| n == &name) {
+            let reg = server::sessions_registry();
+            let mut list = reg.lock().await;
+            list.retain(|(n, _): &(String, u16)| n != &name);
+        }
     }
 
     Ok(serde_json::json!({
@@ -319,6 +327,53 @@ async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json:
         "connected": port.is_some(),
         "warning": warning,
     }))
+}
+
+/// rename an account: identity in accounts.json plus its chrome profile dir.
+/// refuses while the browser is running — windows locks the user-data-dir
+/// of a live chrome, so the rename would half-fail and orphan the session.
+#[tauri::command]
+async fn rename_account(
+    old_name: String,
+    new_name: String,
+    ctx: State<'_, AppCtx>,
+) -> Result<serde_json::Value, String> {
+    let old_name = old_name.trim().to_string();
+    let new_name = new_name.trim().to_string();
+    validate_account_name(&new_name)?;
+    if new_name == old_name {
+        return Ok(serde_json::json!({ "ok": true, "name": new_name }));
+    }
+
+    let app_dir = AppConfig::app_dir();
+    let saved = server::load_saved_accounts(&app_dir);
+    if !saved.iter().any(|n| n == &old_name) {
+        return Err(format!("account {old_name} does not exist"));
+    }
+    if saved.iter().any(|n| n == &new_name) {
+        return Err(format!("account {new_name} already exists"));
+    }
+    if let Some(p) = live_session_port(&old_name).await {
+        if session_alive(p).await {
+            return Err(
+                "close this account's browser before renaming (Open Browser keeps a lock on the profile)".into(),
+            );
+        }
+    }
+
+    // move the chrome profile dir so the whatsapp login survives the rename
+    let old_dir = ctx.paths.accounts.join(&old_name);
+    let new_dir = ctx.paths.accounts.join(&new_name);
+    if old_dir.exists() {
+        std::fs::rename(&old_dir, &new_dir)
+            .map_err(|e| format!("moving profile dir: {e}"))?;
+    }
+
+    server::remove_saved_account(&app_dir, &old_name)
+        .map_err(|e| format!("updating accounts: {e}"))?;
+    server::save_account_name(&app_dir, &new_name)
+        .map_err(|e| format!("updating accounts: {e}"))?;
+    Ok(serde_json::json!({ "ok": true, "name": new_name }))
 }
 
 #[tauri::command]
@@ -1370,7 +1425,7 @@ fn main() {
         })
         .manage(ctx)
         .invoke_handler(tauri::generate_handler![
-            list_accounts, add_account, remove_account, open_browser,
+            list_accounts, add_account, remove_account, rename_account, open_browser,
             start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
