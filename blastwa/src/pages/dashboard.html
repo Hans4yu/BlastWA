@@ -75,11 +75,27 @@
     try { return JSON.stringify(e); } catch (_) { return String(e); }
   }
 
+  // last account snapshot + rename guard: the 3s poll must not rebuild the
+  // table while nothing changed (wasted work) or while a row is being
+  // renamed inline (innerHTML replacement would destroy the edit input)
+  var lastAccountsSnapshot = null;
+
+  function accountsSnapshot(accounts) {
+    return JSON.stringify(accounts.map((a) =>
+      [a.name, a.connected, a.browser_running, a.port, a.number || '']
+    ));
+  }
+
   async function renderAccounts() {
     const $ = (id) => document.getElementById(id);
     try {
       const res = await window.blastwa.invoke('list_accounts');
       const accounts = Array.isArray(res) ? res : (res.accounts || []);
+
+      const snap = accountsSnapshot(accounts);
+      const renaming = document.querySelector('#accounts-body [data-renaming]');
+      if (snap === lastAccountsSnapshot || renaming) return;
+      lastAccountsSnapshot = snap;
 
       $('accounts-total').textContent = accounts.length;
       $('accounts-empty').style.display = accounts.length ? 'none' : '';

@@ -393,6 +393,23 @@
     const list = Array.isArray(accounts) ? accounts : [];
     renderAccountChips(list);
 
+    // live chips: re-poll every 3s so scan -> connected transitions show
+    // without switching tabs. re-render only when the state snapshot actually
+    // changed, so an in-flight chip click is never yanked by a re-render.
+    let lastChipSnapshot = JSON.stringify(list.map(chipSnapshot));
+    const chipPoll = setInterval(async () => {
+      try {
+        const fresh = await invoke('list_accounts');
+        const freshList = Array.isArray(fresh) ? fresh : [];
+        const snap = JSON.stringify(freshList.map(chipSnapshot));
+        if (snap !== lastChipSnapshot) {
+          lastChipSnapshot = snap;
+          renderAccountChips(freshList);
+        }
+      } catch (e) { /* transient ipc failure: keep last-known chips */ }
+    }, 3000);
+    addCleanup(() => clearInterval(chipPoll));
+
     restoreDraft();
     // restoreDraft may have flipped the checkbox: re-sync the picker
     syncScheduleUi();
@@ -446,6 +463,11 @@
       $('list-fields').style.display = imode.value === 'list' ? '' : 'none';
       $('catalog-fields').style.display = imode.value === 'catalog' ? '' : 'none';
     });
+
+    // stable per-account state projection for the live-poll diff gate
+    function chipSnapshot(a) {
+      return [a.name, a.connected, a.browser_running, a.port, a.number || ''];
+    }
 
     function renderAccountChips(list) {
       accountList = list;
