@@ -11,16 +11,16 @@ pub struct ContactList {
     pub contacts: Vec<ContactRow>,
 }
 
-/// normalize a raw phone string into bare digits with country code intent:
-/// strips +, spaces, dashes, parens; keeps leading zeros out.
 pub fn normalize_number(raw: &str) -> String {
     let cleaned: String = raw
         .chars()
         .filter(|c| c.is_ascii_digit())
         .collect();
-    // drop a single leading zero (local trunk format)
+    if let Some(stripped) = cleaned.strip_prefix("08") {
+        return format!("628{stripped}");
+    }
     if let Some(stripped) = cleaned.strip_prefix('0') {
-        return stripped.to_string();
+        return format!("62{stripped}");
     }
     cleaned
 }
@@ -148,8 +148,8 @@ mod tests {
     #[test]
     fn normalize_strips_formatting() {
         assert_eq!(normalize_number("+62 812-3456-7890"), "6281234567890");
-        assert_eq!(normalize_number("(021) 555-1234"), "215551234");
-        assert_eq!(normalize_number("08123456789"), "8123456789");
+        assert_eq!(normalize_number("(021) 555-1234"), "62215551234");
+        assert_eq!(normalize_number("08123456789"), "628123456789");
     }
 
     #[test]

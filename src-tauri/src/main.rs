@@ -365,8 +365,25 @@ async fn rename_account(
     let old_dir = ctx.paths.accounts.join(&old_name);
     let new_dir = ctx.paths.accounts.join(&new_name);
     if old_dir.exists() {
-        std::fs::rename(&old_dir, &new_dir)
-            .map_err(|e| format!("moving profile dir: {e}"))?;
+        let mut renamed = false;
+        let mut last_err = None;
+        for attempt in 0..5 {
+            match std::fs::rename(&old_dir, &new_dir) {
+                Ok(_) => {
+                    renamed = true;
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    tokio::time::sleep(std::time::Duration::from_millis(200 * (attempt + 1))).await;
+                }
+            }
+        }
+        if !renamed {
+            if let Some(e) = last_err {
+                return Err(format!("moving profile dir: {e} (profile directory locked by Windows)"));
+            }
+        }
     }
 
     server::remove_saved_account(&app_dir, &old_name)

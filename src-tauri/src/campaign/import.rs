@@ -150,6 +150,8 @@ fn read_xlsx(path: &Path) -> Result<(Vec<String>, Vec<Vec<String>>)> {
                     calamine::Data::Int(i) => format!("{i}"),
                     calamine::Data::String(s) => s.clone(),
                     calamine::Data::Bool(b) => format!("{b}"),
+                    calamine::Data::DateTime(dt) => format!("{dt}"),
+                    calamine::Data::DateTimeIso(s) => s.clone(),
                     _ => String::new(),
                 })
                 .collect(),
