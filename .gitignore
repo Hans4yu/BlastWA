@@ -1,5 +1,8 @@
-okeSender-clone/
-okesender-clone/
-re/
+/target/
+**/target/
+Cargo.lock.orig
+*.log
+.codegraph/
+.omo/
 debug-shots/
-blastwa/target/
+

@@ -251,12 +251,13 @@ function closeProfileModal() {
 
 async function submitProfile() {
   const raw = document.getElementById('profile-name').value.trim();
+  const createShortcut = document.getElementById('profile-create-shortcut')?.checked ?? false;
   if (!raw) {
     showProfileError('Profile name is required.');
     return;
   }
   try {
-    await invoke('open_profile_window', { profile: raw });
+    await invoke('open_profile_window', { profile: raw, createShortcut });
     closeProfileModal();
   } catch (e) {
     showProfileError(e.message || String(e));

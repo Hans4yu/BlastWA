@@ -1273,17 +1273,69 @@ async fn update_wpp() -> Result<serde_json::Value, String> {
 
 // ---------- multi-profile launcher ----------
 
+#[cfg(windows)]
+fn create_desktop_profile_shortcut(profile_name: &str, exe_path: &std::path::Path) -> Result<(), String> {
+    let desktop_dir = dirs::desktop_dir().ok_or_else(|| "cannot locate user desktop directory".to_string())?;
+    let lnk_path = desktop_dir.join(format!("BlastWA - {profile_name}.lnk"));
+    let exe_str = exe_path.to_str().ok_or_else(|| "invalid exe path".to_string())?;
+    let lnk_str = lnk_path.to_str().ok_or_else(|| "invalid lnk path".to_string())?;
+
+    let ps_script = format!(
+        "$ws = New-Object -ComObject WScript.Shell; \
+         $s = $ws.CreateShortcut('{}'); \
+         $s.TargetPath = '{}'; \
+         $s.Arguments = '--profile \"{}\"'; \
+         $s.WorkingDirectory = '{}'; \
+         $s.IconLocation = '{},0'; \
+         $s.Save()",
+        lnk_str.replace('\'', "''"),
+        exe_str.replace('\'', "''"),
+        profile_name.replace('"', "`\""),
+        exe_path.parent().and_then(|p| p.to_str()).unwrap_or("").replace('\'', "''"),
+        exe_str.replace('\'', "''")
+    );
+
+    let mut cmd = std::process::Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps_script]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let out = cmd.output().map_err(|e| format!("failed to execute shortcut creator: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("powershell shortcut creation failed: {err}"));
+    }
+    log::info!("created desktop shortcut: {}", lnk_path.display());
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn create_desktop_profile_shortcut(_profile_name: &str, _exe_path: &std::path::Path) -> Result<(), String> {
+    Ok(())
+}
+
 /// spawn a fully isolated second instance bound to its own data root.
 /// the child re-enters main() which resolves --profile before any config
 /// load, so every storage path isolates without further wiring.
 #[tauri::command]
-fn open_profile_window(profile: String) -> Result<(), String> {
+fn open_profile_window(profile: String, create_shortcut: Option<bool>) -> Result<(), String> {
     let safe = blastwa_core::config::settings::sanitize_name(&profile);
     if safe.is_empty() {
         return Err("Profile name is required".into());
     }
     let exe = std::env::current_exe().map_err(|e| format!("cannot locate exe: {e}"))?;
-    let mut cmd = std::process::Command::new(exe);
+
+    if create_shortcut.unwrap_or(false) {
+        if let Err(e) = create_desktop_profile_shortcut(&profile, &exe) {
+            log::warn!("failed to create desktop shortcut for profile '{profile}': {e}");
+        }
+    }
+
+    let mut cmd = std::process::Command::new(&exe);
     cmd.arg("--profile").arg(&safe);
     #[cfg(windows)]
     {
@@ -1391,10 +1443,20 @@ fn main() {
             }
         });
     }
-    // drain the legacy channel (gui commands talk to pipeline directly)
+    // REST API blast channel consumer: dispatch incoming requests to the campaign pipeline
+    let pipeline_for_api = pipeline.clone();
     tauri::async_runtime::spawn(async move {
         let mut rx = rx;
-        while rx.recv().await.is_some() {}
+        while let Some(req) = rx.recv().await {
+            log::info!(
+                "executing REST blast request for account '{}' ({} contacts)",
+                req.account,
+                req.contacts.len()
+            );
+            if let Err(e) = pipeline_for_api.start_campaign(req).await {
+                log::error!("REST blast campaign execution failed: {e:#}");
+            }
+        }
     });
 
     let templates = TemplateLibrary::new(&paths.templates);

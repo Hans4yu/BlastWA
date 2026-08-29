@@ -127,7 +127,11 @@
             <label>Profile name (letters, numbers, underscore, dash)</label>
             <input type="text" id="profile-name" maxlength="64" placeholder="e.g. work" />
           </div>
-          <div id="profile-list-wrap">
+          <div class="field-checkbox" style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="profile-create-shortcut" checked style="cursor: pointer;" />
+            <label for="profile-create-shortcut" style="cursor: pointer; font-size: 13px; margin: 0; user-select: none;">Create desktop shortcut (.lnk)</label>
+          </div>
+          <div id="profile-list-wrap" style="margin-top: 12px;">
             <label>Existing profiles</label>
             <div class="profile-chips" id="profile-chips"></div>
           </div>

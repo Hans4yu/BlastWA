@@ -34,10 +34,11 @@ tauri = { version = "2", optional = true }
 tauri-plugin-dialog = { version = "2", optional = true }
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", optional = true, features = [] }
 
 [features]
-gui = ["dep:tauri", "tauri-plugin-dialog"]
+default = []
+gui = ["dep:tauri", "tauri-plugin-dialog", "dep:tauri-build"]
 
 [lib]
 name = "blastwa_core"
