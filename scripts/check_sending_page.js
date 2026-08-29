@@ -1,6 +1,7 @@
 // one-off syntax + wiring check for the U4 toolbar additions
 const fs = require('fs');
-const html = fs.readFileSync(__dirname + '/pages/sending.html', 'utf8');
+const path = require('path');
+const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'pages', 'sending.html'), 'utf8');
 
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 if (!scripts.length) {

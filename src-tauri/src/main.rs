@@ -1446,17 +1446,7 @@ fn main() {
     // REST API blast channel consumer: dispatch incoming requests to the campaign pipeline
     let pipeline_for_api = pipeline.clone();
     tauri::async_runtime::spawn(async move {
-        let mut rx = rx;
-        while let Some(req) = rx.recv().await {
-            log::info!(
-                "executing REST blast request for account '{}' ({} contacts)",
-                req.account,
-                req.contacts.len()
-            );
-            if let Err(e) = pipeline_for_api.start_campaign(req).await {
-                log::error!("REST blast campaign execution failed: {e:#}");
-            }
-        }
+        pipeline_for_api.serve(rx).await;
     });
 
     let templates = TemplateLibrary::new(&paths.templates);

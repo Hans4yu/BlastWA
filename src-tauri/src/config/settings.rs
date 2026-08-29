@@ -164,7 +164,9 @@ impl AppConfig {
 
     pub fn save(&self) -> Result<()> {
         let path = Self::config_path();
-        fs::create_dir_all(path.parent().unwrap())?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         fs::write(&path, serde_json::to_string_pretty(self)?)?;
         Ok(())
     }

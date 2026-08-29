@@ -62,12 +62,14 @@ function makeWindow() {
 
 let failures = 0;
 
+const ROOT_DIR = path.join(__dirname, '..', 'src');
+
 (async () => {
 
 // simulate TWO navigations per page to prove no init duplication issues
 // and that handlers are (re)defined each time
 for (const page of PAGES) {
-  const html = fs.readFileSync(path.join(__dirname, 'pages', page + '.html'), 'utf8');
+  const html = fs.readFileSync(path.join(ROOT_DIR, 'pages', page + '.html'), 'utf8');
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
 
   for (const nav of [1, 2]) {
@@ -113,7 +115,7 @@ for (const page of PAGES) {
   try {
     for (let round = 1; round <= 2; round++) {
       for (const page of PAGES) {
-        const html = fs.readFileSync(path.join(__dirname, 'pages', page + '.html'), 'utf8');
+        const html = fs.readFileSync(path.join(ROOT_DIR, 'pages', page + '.html'), 'utf8');
         const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
         for (const code of scripts) {
           vm.runInContext(code, ctx, { filename: `${page}.html[shared r${round}]` });
@@ -134,7 +136,7 @@ for (const page of PAGES) {
 }
 
 // verify main.js itself parses as a module and contains the lifecycle guards
-const mainjs = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+const mainjs = fs.readFileSync(path.join(ROOT_DIR, 'main.js'), 'utf8');
 const checks = [
   ['script re-execution after injection', /createElement\(['"]script['"]\)/.test(mainjs)],
   ['scripts removed after execution (no double-run)', /old\.remove\(\)/.test(mainjs)],
@@ -157,7 +159,7 @@ for (const [name, ok] of checks) {
 // (e.g. sending.html's function-local `const esc`, indented deeper) alone;
 // actual collisions at ANY indent still fail the shared-context pass above.
 for (const page of PAGES) {
-  const pageHtml = fs.readFileSync(path.join(__dirname, 'pages', page + '.html'), 'utf8');
+  const pageHtml = fs.readFileSync(path.join(ROOT_DIR, 'pages', page + '.html'), 'utf8');
   if (/^[ \t]{0,4}function esc\(/m.test(pageHtml)) {
     console.log(`FAIL ${page}: top-level 'function esc' redeclared (use window.blastwa.esc)`);
     failures++;

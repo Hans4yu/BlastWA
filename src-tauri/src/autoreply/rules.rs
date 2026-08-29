@@ -44,7 +44,9 @@ pub fn match_rule<'a>(message: &str, rules: &'a [Rule]) -> Option<&'a Rule> {
 }
 
 pub fn save_rules(rules: &[Rule], path: &std::path::Path) -> anyhow::Result<()> {
-    std::fs::create_dir_all(path.parent().unwrap())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     Ok(std::fs::write(path, serde_json::to_string_pretty(rules)?)?)
 }
 

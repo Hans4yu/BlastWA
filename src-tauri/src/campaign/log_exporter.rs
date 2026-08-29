@@ -139,10 +139,11 @@ pub fn finalize_last_campaign_record(app_dir: &Path, rec: &CampaignRecord) -> Re
     while matches!(lines.last(), Some(l) if l.trim().is_empty()) {
         lines.pop();
     }
-    if lines.is_empty() {
+    if let Some(last) = lines.last_mut() {
+        *last = serde_json::to_string(rec)?;
+    } else {
         return Ok(());
     }
-    *lines.last_mut().unwrap() = serde_json::to_string(rec)?;
     let mut out = lines.join("\n");
     out.push('\n');
     std::fs::write(&path, out)?;

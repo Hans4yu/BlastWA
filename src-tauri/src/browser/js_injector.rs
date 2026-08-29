@@ -9,7 +9,6 @@ use serde_json::Value;
 use crate::message::variables::js_escape;
 
 const WPP_CDN: &str = "https://unpkg.com/@wppconnect/wa-js/dist/wppconnect-wa.js";
-const WPP_INJECT_TIMEOUT_SECS: u64 = 30;
 
 pub struct JsInjector {
     pub page: Page,
@@ -167,31 +166,36 @@ impl JsInjector {
         .await
         .context("executing WPP.js bundle via cdp")?;
 
-        // poll until WPP.isReady
-        let deadline = tokio::time::Instant::now()
-            + std::time::Duration::from_secs(WPP_INJECT_TIMEOUT_SECS);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(90);
+        let mut check_interval = std::time::Duration::from_millis(300);
         loop {
             let ready = self
                 .eval_json(
-                    r#"(function(){ try { return !!(window.WPP && window.WPP.isReady); } catch(e){ return false; } })()"#,
+                    r#"(function(){ 
+                        try { 
+                            if (window.WPP && window.WPP.isReady) return true;
+                            if (window.WPP && typeof window.WPP.init === 'function') {
+                                window.WPP.init().catch(function(){});
+                            }
+                            return false;
+                        } catch(e){ return false; } 
+                    })()"#,
                 )
                 .await?
                 .as_bool()
                 .unwrap_or(false);
             if ready {
-                let _ = self
-                    .eval_json(
-                        r#"(async function(){ try { await window.WPP.init(); } catch(e){} return true; })()"#,
-                    )
-                    .await;
                 self.wpp_injected = true;
-                log::info!("WPP.js injected and ready");
+                log::info!("WPP.js injected and ready (adaptive bootstrap)");
                 return Ok(());
             }
             if tokio::time::Instant::now() >= deadline {
-                anyhow::bail!("WPP.js did not become ready within {WPP_INJECT_TIMEOUT_SECS}s");
+                anyhow::bail!("WPP.js did not become ready (adaptive timeout reached)");
             }
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            tokio::time::sleep(check_interval).await;
+            if check_interval < std::time::Duration::from_millis(1000) {
+                check_interval += std::time::Duration::from_millis(100);
+            }
         }
     }
 
@@ -203,28 +207,30 @@ impl JsInjector {
         message: &str,
         is_safe: bool,
     ) -> Result<SendResult> {
-        let id = js_escape(wa_id);
-        let msg = js_escape(message);
+        let id_json = serde_json::to_string(wa_id)?;
+        let msg_json = serde_json::to_string(message)?;
         let script = format!(
             r#"(async () => {{
+                var id = {id_json};
+                var msg = {msg_json};
                 try {{
                     if ({is_safe}) {{
-                        var exists = await WPP.contact.queryExists('{id}');
+                        var exists = await WPP.contact.queryExists(id);
                         if (!exists) return {{ sentStatus: false, error: "chat not found" }};
                     }}
-                    var r = await WPP.chat.sendTextMessage('{id}', '{msg}');
+                    var r = await WPP.chat.sendTextMessage(id, msg);
                     return {{ sentStatus: true, result: r || null }};
                 }} catch (e1) {{
                     try {{
-                        var r2 = await WAPI.sendMessage('{id}', '{msg}');
+                        var r2 = await WAPI.sendMessage(id, msg);
                         return {{ sentStatus: !(r2 && r2.erro) }};
                     }} catch (e2) {{
                         return {{ sentStatus: false, error: String(e1) }};
                     }}
                 }}
             }})()"#,
-            id = id,
-            msg = msg,
+            id_json = id_json,
+            msg_json = msg_json,
             is_safe = is_safe,
         );
         let v = self.eval_json(&script).await?;

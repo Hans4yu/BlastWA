@@ -109,7 +109,7 @@ pub async fn run_campaign(
         }
     }
 
-    let mut order: Vec<usize> = (0..contacts.len()).collect();
+    let order: Vec<usize> = (0..contacts.len()).collect();
 
     let stats = Arc::new(CampaignStats {
         sent: AtomicU32::new(0),

@@ -38,7 +38,9 @@ impl TemplateLibrary {
     }
 
     fn save_all(&self, templates: &[MessageTemplate]) -> Result<()> {
-        std::fs::create_dir_all(self.path.parent().unwrap())?;
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         Ok(std::fs::write(
             &self.path,
             serde_json::to_string_pretty(templates)?,

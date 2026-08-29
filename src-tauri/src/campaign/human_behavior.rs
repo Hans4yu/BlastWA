@@ -48,8 +48,9 @@ impl Personality {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum RhythmState {
+pub enum RhythmState {
     Active,
+    #[allow(dead_code)]
     Resting,
 }
 
@@ -125,19 +126,13 @@ pub struct HumanBehaviorEngine {
     backoff_level: u32,
 }
 
-static MAX_BACKOFF_MS: u64 = 15 * 60 * 1000;
-
 impl HumanBehaviorEngine {
     pub fn new(account_name: &str, config: HumanBehaviorConfig) -> Self {
         let personality = Personality::generate(account_name);
-        let mut burst_remaining = personality.burst_len_max;
+        let mut rng = rand::thread_rng();
+        let burst_remaining = rng.gen_range(personality.burst_len_min..=personality.burst_len_max);
         Self {
-            burst_remaining: {
-                let mut rng = rand::thread_rng();
-                burst_remaining =
-                    rng.gen_range(personality.burst_len_min..=personality.burst_len_max);
-                burst_remaining
-            },
+            burst_remaining,
             config,
             personality,
             state: RhythmState::Active,

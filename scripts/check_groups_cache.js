@@ -22,7 +22,7 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 
-const html = fs.readFileSync(path.join(__dirname, 'pages', 'groups.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'pages', 'groups.html'), 'utf8');
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 
 let failures = 0;
