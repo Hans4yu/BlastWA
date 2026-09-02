@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub chrome_path: String,
@@ -110,6 +110,39 @@ fn resolve_app_dir(base: &Path, profile: Option<&str>) -> PathBuf {
     }
 }
 
+fn merge_chrome_fallback(profile: &AppConfig, classic: &AppConfig) -> AppConfig {
+    let mut merged = profile.clone();
+    if merged.chrome_path.is_empty() {
+        merged.chrome_path = classic.chrome_path.clone();
+    }
+    if merged.chrome_version.is_empty() {
+        merged.chrome_version = classic.chrome_version.clone();
+    }
+    merged
+}
+
+fn resolve_profile_config(profile: AppConfig, classic: Result<AppConfig>) -> AppConfig {
+    let classic = match classic {
+        Ok(config) => config,
+        Err(_) => AppConfig::default(),
+    };
+    merge_chrome_fallback(&profile, &classic)
+}
+
+fn load_profile_config(profile_path: &Path, classic_path: &Path) -> AppConfig {
+    let profile = match AppConfig::load_from_path(profile_path) {
+        Ok(config) => config,
+        Err(error) => {
+            log::warn!(
+                "profile config load failed ({}), using classic Chrome fallback",
+                error
+            );
+            AppConfig::default()
+        }
+    };
+    resolve_profile_config(profile, AppConfig::load_from_path(classic_path))
+}
+
 impl AppConfig {
     /// classic data root, ignoring any active profile (used by the launcher
     /// to scan profiles/ across all instances)
@@ -155,6 +188,14 @@ impl AppConfig {
 
     pub fn load() -> Result<Self> {
         let path = Self::config_path();
+        if Self::active_profile().is_some() {
+            let classic_path = Self::classic_root().join("config.json");
+            return Ok(load_profile_config(&path, &classic_path));
+        }
+        Self::load_from_path(&path)
+    }
+
+    fn load_from_path(path: &Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::default());
         }
@@ -226,5 +267,149 @@ mod tests {
         // segment and must be rejected at startup
         assert!(AppConfig::init_profile("").is_err());
         assert!(AppConfig::init_profile(" /// ").is_ok());
+    }
+
+    #[test]
+    fn chrome_fallback_fills_missing_profile_values_without_mutating_profile() {
+        // Given: a profile has no Chrome values and the classic config has the
+        // installer-detected runtime plus unrelated settings.
+        let profile = AppConfig::default();
+        let classic = AppConfig { chrome_path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe".into(), chrome_version: "128.0.6613.120".into(), default_delay_min: 21, default_delay_max: 34, active_profile: "Classic".into(), human_mode_preset: "cautious".into(), api_enabled: true, api_port: 9876, ..AppConfig::default() };
+
+        // When: the profile is resolved against the classic fallback.
+        let merged = merge_chrome_fallback(&profile, &classic);
+        let expected = AppConfig {
+            chrome_path: classic.chrome_path.clone(),
+            chrome_version: classic.chrome_version.clone(),
+            ..profile.clone()
+        };
+
+        // Then: only the missing Chrome fields come from classic, and the
+        // input profile remains unchanged for read-time-only fallback.
+        assert_eq!(merged, expected);
+        assert!(profile.chrome_path.is_empty() && profile.chrome_version.is_empty());
+    }
+
+    #[test]
+    fn chrome_fallback_preserves_non_empty_profile_values_even_when_invalid() {
+        // Given: a profile contains explicit, non-empty Chrome values that do
+        // not point to a valid executable.
+        let profile = AppConfig {
+            chrome_path: "C:\\missing\\profile-chrome.exe".into(),
+            chrome_version: "profile-version".into(),
+            ..AppConfig::default()
+        };
+        let classic = AppConfig {
+            chrome_path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe".into(),
+            chrome_version: "classic-version".into(),
+            ..AppConfig::default()
+        };
+
+        // When: the profile is resolved against the classic fallback.
+        let merged = merge_chrome_fallback(&profile, &classic);
+
+        // Then: explicit profile values remain authoritative.
+        assert_eq!(merged.chrome_path, profile.chrome_path);
+        assert_eq!(merged.chrome_version, profile.chrome_version);
+    }
+
+    #[test]
+    fn chrome_fallback_inherits_each_missing_value_independently() {
+        // Given: only the profile path is missing while its version is explicit.
+        let profile = AppConfig {
+            chrome_version: "profile-version".into(),
+            ..AppConfig::default()
+        };
+        let classic = AppConfig {
+            chrome_path: "classic-path".into(),
+            chrome_version: "classic-version".into(),
+            ..AppConfig::default()
+        };
+
+        // When: the profile is resolved against the classic fallback.
+        let merged = merge_chrome_fallback(&profile, &classic);
+
+        // Then: the missing path is inherited but the explicit version wins.
+        assert_eq!(merged.chrome_path, classic.chrome_path);
+        assert_eq!(merged.chrome_version, profile.chrome_version);
+    }
+
+    #[test]
+    fn malformed_classic_config_does_not_break_profile_resolution() {
+        // Given: a usable profile config and an unreadable classic fallback.
+        let profile = AppConfig::default();
+        let classic = Err(anyhow::anyhow!("malformed classic config"));
+
+        // When: the profile is resolved against the failed classic fallback.
+        let merged = resolve_profile_config(profile, classic);
+
+        // Then: the profile remains usable with its own default Chrome values.
+        assert!(merged.chrome_path.is_empty());
+        assert!(merged.chrome_version.is_empty());
+    }
+
+    #[test]
+    fn profile_file_loading_falls_back_without_rewriting_profile_data() {
+        // Given: a valid classic config and a temporary profile config path.
+        let root = std::env::temp_dir().join(format!(
+            "blastwa-profile-config-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        assert!(fs::create_dir_all(&root).is_ok());
+        let profile_path = root.join("profile.json");
+        let classic_path = root.join("classic.json");
+        let classic_json = r#"{
+            "chrome_path": "classic-path",
+            "chrome_version": "classic-version",
+            "default_delay_min": 31,
+            "default_delay_max": 32,
+            "active_profile": "classic",
+            "human_mode_preset": "cautious",
+            "api_enabled": true,
+            "api_port": 9876
+        }"#;
+        assert!(fs::write(&classic_path, classic_json).is_ok());
+
+        // When: the profile file is missing, then malformed, then explicit.
+        let missing = load_profile_config(&profile_path, &classic_path);
+        assert_eq!(missing.chrome_path, "classic-path");
+        assert_eq!(missing.chrome_version, "classic-version");
+        assert!(!profile_path.exists());
+
+        let malformed_json = "{ malformed profile";
+        assert!(fs::write(&profile_path, malformed_json).is_ok());
+        let malformed_before = fs::read_to_string(&profile_path).unwrap_or_default();
+        assert!(AppConfig::load_from_path(&profile_path).is_err());
+        let malformed = load_profile_config(&profile_path, &classic_path);
+        assert_eq!(malformed.chrome_path, "classic-path");
+        assert_eq!(malformed.chrome_version, "classic-version");
+        assert_eq!(fs::read_to_string(&profile_path).unwrap_or_default(), malformed_before);
+
+        let explicit_json = r#"{
+            "chrome_path": "profile-path",
+            "chrome_version": "profile-version",
+            "default_delay_min": 3,
+            "default_delay_max": 4,
+            "active_profile": "profile",
+            "human_mode_preset": "natural",
+            "api_enabled": false,
+            "api_port": 7654
+        }"#;
+        assert!(fs::write(&profile_path, explicit_json).is_ok());
+        let explicit_before = fs::read_to_string(&profile_path).unwrap_or_default();
+        let explicit = load_profile_config(&profile_path, &classic_path);
+        assert_eq!(explicit.chrome_path, "profile-path");
+        assert_eq!(explicit.chrome_version, "profile-version");
+        assert_eq!(explicit.default_delay_min, 3);
+        assert_eq!(explicit.default_delay_max, 4);
+        assert_eq!(explicit.active_profile, "profile");
+        assert_eq!(explicit.human_mode_preset, "natural");
+        assert!(!explicit.api_enabled);
+        assert_eq!(explicit.api_port, 7654);
+        assert_eq!(fs::read_to_string(&profile_path).unwrap_or_default(), explicit_before);
+
+        // Then: the temporary files are removed after the file-loading checks.
+        assert!(fs::remove_dir_all(&root).is_ok());
     }
 }
