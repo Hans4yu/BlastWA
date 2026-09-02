@@ -14,7 +14,7 @@
     </div>
     <div class="panel-body">
       <div class="field">
-        <label>Detected Chrome path (set by blastwa-init.exe)</label>
+        <label>Detected Chrome path (from setup.exe or profile config)</label>
         <input type="text" id="chrome-path" readonly />
       </div>
       <div class="field" style="margin-bottom:0">
@@ -105,7 +105,7 @@ curl -X POST http://127.0.0.1:8765/api/stop</pre>
     const $ = (id) => document.getElementById(id);
 
     const cfg = await invoke('get_config');
-    $('chrome-path').value = cfg.chrome_path || '(run blastwa-init.exe)';
+    $('chrome-path').value = cfg.chrome_path || '(not configured)';
     $('chrome-version').value = cfg.chrome_version || '';
     $('delay-min').value = cfg.default_delay_min ?? 5;
     $('delay-max').value = cfg.default_delay_max ?? 12;

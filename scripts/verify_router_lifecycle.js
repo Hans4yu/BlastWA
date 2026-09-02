@@ -151,6 +151,15 @@ for (const [name, ok] of checks) {
   if (!ok) { console.log(`FAIL main.js: ${name}`); failures++; }
 }
 
+const settingsHtml = fs.readFileSync(path.join(ROOT_DIR, 'pages', 'settings.html'), 'utf8');
+const settingsChecks = [
+  ['current Chrome runtime guidance', /Detected Chrome path \(from setup\.exe or profile config\)/.test(settingsHtml)],
+  ['removed bootstrapper guidance', !/blastwa-init\.exe/.test(settingsHtml)],
+];
+for (const [name, ok] of settingsChecks) {
+  if (!ok) { console.log(`FAIL settings.html: ${name}`); failures++; }
+}
+
 // esc hygiene: pages must alias the shared helper, never re-declare it at
 // top level. a top-level const/let/function collides on the SECOND navigation
 // because classic-script lexical globals persist for the document lifetime.
