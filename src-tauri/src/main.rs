@@ -73,6 +73,25 @@ async fn session_alive(port: u16) -> bool {
     tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok()
 }
 
+fn format_launch_failure(launch_error: Option<&str>) -> String {
+    match launch_error {
+        Some(error) => format!(
+            "chrome launch failed: {error}; chrome cdp endpoint not found after launch"
+        ),
+        None => "chrome cdp endpoint not found after launch".to_string(),
+    }
+}
+
+fn combine_launch_and_discovery(
+    launch_result: Result<u16, String>,
+    discovered_port: Option<u16>,
+) -> Result<u16, String> {
+    match discovered_port {
+        Some(port) => Ok(port),
+        None => Err(format_launch_failure(launch_result.err().as_deref())),
+    }
+}
+
 /// reuse a live session when one exists; otherwise spawn an isolated chrome
 /// instance with a dedicated per-account user-data-dir. never touches the
 /// user's personal chrome profile. no automation-warning suppression flags.
@@ -93,11 +112,10 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
     let handle = tauri::async_runtime::spawn(async move {
         let sm = blastwa_core::browser::cdp_client::SessionManager::new(accounts_dir, chrome_path);
         let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
-        // ok(None) = spawn attached to an already-running chrome instance, so
-        // the port we passed never opened. discovery below finds the real one.
-        sm.launch(&owned, port).await.map(|_| port).ok()
+        sm.launch(&owned, port).await.map(|_| port)
     });
-    let spawned_port: Option<u16> = handle.await.map_err(|e| e.to_string())?;
+    let launch_result = handle.await.map_err(|e| e.to_string())?;
+    let spawned_port = launch_result.as_ref().ok().copied();
     // ports already owned by other accounts must not be handed to this one:
     // discovery prefers "any endpoint hosting whatsapp", which would bind a
     // second account to the first account's live session.
@@ -109,9 +127,12 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
             .map(|(_, p)| *p)
             .collect()
     };
-    blastwa_core::browser::cdp_client::discover_wa_port_excluding(spawned_port, &taken)
-        .await
-        .ok_or_else(|| "chrome cdp endpoint not found after launch".to_string())
+    let discovered_port =
+        blastwa_core::browser::cdp_client::discover_wa_port_excluding(spawned_port, &taken).await;
+    combine_launch_and_discovery(
+        launch_result.map_err(|error| error.to_string()),
+        discovered_port,
+    )
 }
 
 async fn register_live_session(name: &str, port: u16) {
@@ -1510,4 +1531,44 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running blastwa");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_result_combiner_keeps_spawn_context_on_discovery_failure() {
+        // Given: Chrome launch failed before endpoint discovery completed.
+        let launch_error = "spawning chrome: The system cannot find the file specified.";
+
+        // When: launch and discovery results are combined.
+        let result = combine_launch_and_discovery(Err(launch_error.into()), None);
+
+        // Then: the actionable launch detail is retained alongside discovery context.
+        assert!(result.is_err());
+        let message = result.err().unwrap_or_default();
+        assert!(message.contains(launch_error));
+        assert!(message.contains("chrome cdp endpoint not found after launch"));
+    }
+
+    #[test]
+    fn launch_result_combiner_keeps_discovered_port() {
+        // Given: launch succeeded and discovery found the WhatsApp endpoint.
+        // When: launch and discovery results are combined.
+        let result = combine_launch_and_discovery(Ok(9222), Some(9333));
+
+        // Then: the discovered endpoint remains the result.
+        assert_eq!(result, Ok(9333));
+    }
+
+    #[test]
+    fn launch_result_combiner_preserves_discovery_only_context() {
+        // Given: launch did not provide an error and endpoint discovery failed.
+        // When: launch and discovery results are combined.
+        let result = combine_launch_and_discovery(Ok(9222), None);
+
+        // Then: the existing discovery message remains unchanged.
+        assert_eq!(result, Err("chrome cdp endpoint not found after launch".into()));
+    }
 }
