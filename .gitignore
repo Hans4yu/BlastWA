@@ -11,3 +11,5 @@ AGENTS.md
 *.yml
 AGENTS.md
 .docs/
+/docs/*
+/docs/**/*
