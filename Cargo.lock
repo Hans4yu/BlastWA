@@ -300,13 +300,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "blastwa-init"
+name = "blastwa-setup"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "dirs 5.0.1",
  "log",
  "serde",
  "serde_json",
+ "windows-sys 0.48.0",
  "winreg 0.52.0",
 ]
 

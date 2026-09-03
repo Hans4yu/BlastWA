@@ -82,15 +82,6 @@ fn format_launch_failure(launch_error: Option<&str>) -> String {
     }
 }
 
-fn combine_launch_and_discovery(
-    launch_result: Result<u16, String>,
-    discovered_port: Option<u16>,
-) -> Result<u16, String> {
-    match discovered_port {
-        Some(port) => Ok(port),
-        None => Err(format_launch_failure(launch_result.err().as_deref())),
-    }
-}
 
 /// reuse a live session when one exists; otherwise spawn an isolated chrome
 /// instance with a dedicated per-account user-data-dir. never touches the
@@ -109,30 +100,37 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
     let chrome_path = ctx.cfg.lock().unwrap().chrome_path.clone();
     let accounts_dir = ctx.paths.accounts.clone();
     let owned = name.to_string();
+    let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
+    register_live_session(name, port).await;
     let handle = tauri::async_runtime::spawn(async move {
         let sm = blastwa_core::browser::cdp_client::SessionManager::new(accounts_dir, chrome_path);
-        let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
         sm.launch(&owned, port).await.map(|_| port)
     });
     let launch_result = handle.await.map_err(|e| e.to_string())?;
-    let spawned_port = launch_result.as_ref().ok().copied();
-    // ports already owned by other accounts must not be handed to this one:
-    // discovery prefers "any endpoint hosting whatsapp", which would bind a
-    // second account to the first account's live session.
-    let taken: Vec<u16> = {
-        let reg = server::sessions_registry();
-        let list = reg.lock().await;
-        list.iter()
-            .filter(|(n, _): &&(String, u16)| n != name)
-            .map(|(_, p)| *p)
-            .collect()
-    };
-    let discovered_port =
-        blastwa_core::browser::cdp_client::discover_wa_port_excluding(spawned_port, &taken).await;
-    combine_launch_and_discovery(
-        launch_result.map_err(|error| error.to_string()),
-        discovered_port,
-    )
+    match launch_result {
+        Ok(port) => Ok(port),
+        Err(e) => {
+            {
+                let reg = server::sessions_registry();
+                let mut list = reg.lock().await;
+                list.retain(|(n, _): &(String, u16)| n != name);
+            }
+            let taken: Vec<u16> = {
+                let reg = server::sessions_registry();
+                let list = reg.lock().await;
+                list.iter()
+                    .filter(|(n, _): &&(String, u16)| n != name)
+                    .map(|(_, p)| *p)
+                    .collect()
+            };
+            let discovered =
+                blastwa_core::browser::cdp_client::discover_wa_port_excluding(None, &taken).await;
+            match discovered {
+                Some(port) => Ok(port),
+                None => Err(format_launch_failure(Some(&e.to_string()))),
+            }
+        }
+    }
 }
 
 async fn register_live_session(name: &str, port: u16) {
@@ -306,9 +304,11 @@ async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json:
     let name = name.trim().to_string();
     validate_account_name(&name)?;
 
-    // identity is configuration: persist it first, independent of whether
-    // the chrome session manages to start
     let app_dir = AppConfig::app_dir();
+    if server::load_saved_accounts(&app_dir).iter().any(|n| n == &name) {
+        return Err(format!("Account \"{name}\" already exists"));
+    }
+
     server::save_account_name(&app_dir, &name)
         .map_err(|e| format!("saving account: {e}"))?;
 

@@ -5,4 +5,8 @@ Cargo.lock.orig
 .codegraph/
 .omo/
 debug-shots/
-
+/screenshots
+AGENTS.md
+*.png
+*.yml
+AGENTS.md

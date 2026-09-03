@@ -50,8 +50,16 @@ impl SessionManager {
             .context("spawning chrome")?;
 
         let mut last_err = None;
-        for _ in 0..10 {
-            tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+        // adaptive backoff: 500ms → 1000ms → 1500ms → 2000ms (cap), total
+        // budget ~25 s. windows cold-starts routinely need 10-18 s before
+        // the chrome debug socket is ready.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(25);
+        let mut delay = std::time::Duration::from_millis(500);
+        loop {
+            tokio::time::sleep(delay).await;
+            if tokio::time::Instant::now() >= deadline {
+                break;
+            }
             match Browser::connect(format!("http://127.0.0.1:{port}")).await {
                 Ok((browser, mut handler)) => {
                     // cdp handler is a stream that must be polled or nothing works
@@ -75,7 +83,11 @@ impl SessionManager {
                         handler_task,
                     });
                 }
-                Err(e) => last_err = Some(e),
+                Err(e) => {
+                    last_err = Some(e);
+                    delay = (delay + std::time::Duration::from_millis(500))
+                        .min(std::time::Duration::from_secs(2));
+                }
             }
         }
         Err(anyhow::anyhow!(
