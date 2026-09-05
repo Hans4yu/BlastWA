@@ -230,6 +230,18 @@ fn register_windows_uninstaller(install_dir: &Path, exe_path: &Path, uninstaller
 }
 
 fn perform_uninstall() -> Result<(), String> {
+    // a running app holds locks on its own exe and the data dir; close it
+    // first or every later delete attempt fails
+    let mut kill = Command::new("taskkill");
+    kill.args(["/F", "/IM", "blastwa.exe"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        kill.creation_flags(CREATE_NO_WINDOW);
+    }
+    let _ = kill.spawn();
+
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let uninstall_path = format!(r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", APP_NAME);
     let registered_install_dir = hkcu
@@ -268,7 +280,16 @@ fn perform_uninstall() -> Result<(), String> {
         let _ = std::fs::remove_file(lnk);
     }
 
-    let _ = std::fs::remove_dir_all(app_data_dir());
+    // brief locks can linger right after the taskkill; retry briefly
+    for _ in 0..10 {
+        if !app_data_dir().exists() {
+            break;
+        }
+        if std::fs::remove_dir_all(app_data_dir()).is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
 
     let install_dir = registered_install_dir
         .or_else(|| std::env::current_exe().ok().and_then(|path| path.parent().map(Path::to_path_buf)))
@@ -277,16 +298,32 @@ fn perform_uninstall() -> Result<(), String> {
     if current_exe.as_ref().and_then(|path| path.parent()) != Some(install_dir.as_path()) {
         let _ = std::fs::remove_dir_all(&install_dir);
     } else {
-        let escaped = install_dir.to_string_lossy().replace('"', "\\\"");
-        let script = format!("timeout /t 2 /nobreak > nul & rmdir /s /q \"{escaped}\"");
-        let mut cleanup = Command::new("cmd.exe");
-        cleanup.args(["/C", &script]);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cleanup.creation_flags(0x0800_0000 | 0x0000_0008);
+        // self-delete: the running uninstaller keeps uninstall.exe locked
+        // until its dialog is dismissed, so a detached sweeper retries
+        // rmdir until every process is out of the way. it runs from a batch
+        // file (not an inline `cmd /C` one-liner) because inline `if ... exit
+        // & ping` parses as one conditional and skips the delay, spinning
+        // the whole loop out before the user can dismiss anything. ping
+        // provides the delay because timeout.exe exits instantly without a
+        // console, and the cmd's working directory must sit outside the
+        // tree it removes.
+        let sweeper = std::env::temp_dir().join("blastwa_uninstall_sweeper.cmd");
+        let bat = format!(
+            "@echo off\r\nfor /l %%i in (1,1,120) do (\r\n  rmdir /s /q \"{data}\" >nul 2>&1\r\n  rmdir /s /q \"{install}\" >nul 2>&1\r\n  if not exist \"{install}\" del \"%~f0\" >nul 2>&1\r\n  if not exist \"{install}\" exit\r\n  ping -n 2 127.0.0.1 >nul\r\n)\r\ndel \"%~f0\" >nul 2>&1\r\n",
+            data = app_data_dir().to_string_lossy().replace('"', ""),
+            install = install_dir.to_string_lossy().replace('"', ""),
+        );
+        if std::fs::write(&sweeper, bat).is_ok() {
+            let mut cleanup = Command::new("cmd.exe");
+            cleanup.args(["/C", &sweeper.to_string_lossy()]);
+            cleanup.current_dir(std::env::temp_dir());
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cleanup.creation_flags(0x0800_0000 | 0x0000_0008);
+            }
+            let _ = cleanup.spawn();
         }
-        let _ = cleanup.spawn();
     }
 
     let _ = hkcu.delete_subkey_all(uninstall_path);
@@ -714,7 +751,7 @@ fn main() {
         let _ = perform_uninstall();
         #[cfg(windows)]
         unsafe {
-            let msg = to_wide("BlastWA has been uninstalled successfully from your computer.\0");
+            let msg = to_wide("BlastWA has been uninstalled. Leftover install files are removed automatically within a few seconds.\0");
             let title = to_wide("BlastWA Uninstall\0");
             MessageBoxW(0, msg.as_ptr(), title.as_ptr(), MB_ICONINFORMATION | MB_OK);
         }
