@@ -100,7 +100,9 @@
       lastAccountsSnapshot = snap;
 
       $('accounts-total').textContent = accounts.length;
-      $('accounts-empty').style.display = accounts.length ? 'none' : '';
+      // the tbody renders its own "No accounts yet" row when the list is
+      // empty; this div stays hidden on success and is reserved for errors
+      $('accounts-empty').style.display = 'none';
 
       $('accounts-body').innerHTML = accounts.length ? accounts.map((a, i) => {
         // explicit semantics: connected requires whatsapp auth, not just a
