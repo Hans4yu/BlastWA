@@ -8,4 +8,7 @@ pub mod autoreply;
 pub mod api;
 pub mod updater;
 
+/// serializable IPC error contract shared by the tauri command layer
+pub mod error;
+
 pub mod browser;

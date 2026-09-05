@@ -1,21 +1,10 @@
 use blastwa_core::api::server;
 use blastwa_core::account::service::AccountStatus;
+use blastwa_core::error::AppError;
 use serde_json::Value;
 use tauri::State;
 
 use super::super::AppCtx;
-#[derive(Debug, serde::Serialize)]
-pub(crate) struct AppError {
-    pub code: String,
-    pub message: String,
-    pub retryable: bool,
-}
-
-impl From<String> for AppError {
-    fn from(message: String) -> Self {
-        Self { code: "operation_failed".into(), message, retryable: true }
-    }
-}
 
 pub(crate) fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() {

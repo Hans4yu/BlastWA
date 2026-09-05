@@ -1,1 +1,10 @@
 pub(crate) mod accounts;
+pub(crate) mod autoreply;
+pub(crate) mod campaigns;
+pub(crate) mod config;
+pub(crate) mod contacts;
+pub(crate) mod groups;
+pub(crate) mod logs;
+pub(crate) mod profiles;
+pub(crate) mod templates;
+pub(crate) mod updater;
