@@ -47,12 +47,15 @@ export const invoke = isTauri
 
 let navEpoch = 0;          // increments on every navigation
 let pageCleanups = [];     // unlisten fns for the CURRENT page only
+let injectedPageScripts = [];
 
 function runPageCleanups() {
   for (const fn of pageCleanups) {
     try { fn(); } catch (e) { console.warn('page cleanup failed', e); }
   }
   pageCleanups = [];
+  for (const script of injectedPageScripts) script.remove();
+  injectedPageScripts = [];
 }
 
 // register any page-scoped teardown (e.g. clearing an interval) that should
@@ -95,16 +98,18 @@ function setActive(page) {
 async function route() {
   const hash = location.hash.replace('#/', '') || 'dashboard';
   const page = PAGES.includes(hash) ? hash : 'dashboard';
+  navEpoch++;
+  const routeEpoch = navEpoch;
   setActive(page);
 
   // new navigation: invalidate in-flight listener registrations and
   // release the previous page's event listeners
-  navEpoch++;
   runPageCleanups();
 
   try {
     const res = await fetch(`pages/${page}.html`);
     const html = await res.text();
+    if (routeEpoch !== navEpoch) return;
     contentEl.innerHTML = html;
     contentEl.scrollTop = 0;
 
@@ -119,6 +124,7 @@ async function route() {
         s.textContent = old.textContent;
       }
       document.body.appendChild(s);
+      injectedPageScripts.push(s);
       old.remove(); // executed copy lives in body; keep content clean
     }
 
@@ -127,7 +133,9 @@ async function route() {
     const initFn = window[`init_${page}`];
     if (typeof initFn === 'function') {
       try {
+        const epoch = navEpoch;
         await initFn();
+        if (epoch !== navEpoch) return;
       } catch (e) {
         console.error(`init_${page} failed:`, e);
       }
@@ -284,7 +292,7 @@ async function refreshStatus() {
     const waiting = list.find((a) => a.browser_running && !a.wa_authenticated);
     if (connected) {
       $('sb-dot').classList.remove('off');
-      $('sb-conn').textContent = 'Connected';
+      $('sb-conn').textContent = 'Online';
       $('sb-account').textContent = `Account: ${connected.number || connected.name}`;
     } else if (waiting) {
       $('sb-dot').classList.add('off');

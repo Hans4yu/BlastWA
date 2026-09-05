@@ -294,6 +294,7 @@
     restoreCheckFromCache();
 
     const unlistenCheck = await listen('check_progress', (ev) => {
+      if (!document.getElementById('check-body')) return;
       const p = ev.payload || ev;
       appendCheckRow(p);
       lastOutcomes.push({ number: p.number, exists: !!p.exists, kind: p.kind || '' });
@@ -303,7 +304,6 @@
       document.getElementById('check-summary').textContent =
         `checked ${p.checked}/${p.total}, ${validNumbers.length} valid`;
     });
-    addCleanup(unlistenCheck);
 
     document.getElementById('btn-run-check').addEventListener('click', async () => {
       const btn = document.getElementById('btn-run-check');
@@ -411,16 +411,17 @@
   };
 
   function appendCheckRow(p) {
+    const body = document.getElementById('check-body');
+    if (!body) return;
     const cls = p.exists ? 'badge-green' : 'badge-red';
-    document.getElementById('check-body').insertAdjacentHTML('beforeend',
+    body.insertAdjacentHTML('beforeend',
       `<tr>
-        <td>${document.getElementById('check-body').children.length + 1}</td>
+        <td>${body.children.length + 1}</td>
         <td class="mono">${esc(p.number)}</td>
         <td><span class="badge ${cls}">${p.exists ? 'yes' : 'no'}</span></td>
         <td>${esc(p.kind || '')}</td>
       </tr>`);
-    document.getElementById('check-body').parentElement.scrollTop =
-      document.getElementById('check-body').parentElement.scrollHeight;
+    body.parentElement.scrollTop = body.parentElement.scrollHeight;
   }
 
   // shared esc() from window.blastwa (hoisted in main.js); var, not const,
@@ -434,9 +435,11 @@
   var ROWS_KEY = 'blastwa.contacts.rowsVisible';
 
   function applyRowsVisible() {
-    var n = Number(document.getElementById('rows-visible').value) || 15;
-    document.getElementById('rows-visible-label').textContent = n;
+    var slider = document.getElementById('rows-visible');
+    var label = document.getElementById('rows-visible-label');
     var wrap = document.getElementById('contacts-table-wrap');
+    if (!slider || !label || !wrap) return;
+    var n = Number(slider.value) || 15;
     var row = wrap.querySelector('#contacts-body tr');
     var rowH = row ? row.offsetHeight : 29; // measured, with a sane fallback
     var headH = wrap.querySelector('thead tr') ? wrap.querySelector('thead tr').offsetHeight : 29;
@@ -453,13 +456,15 @@
     document.getElementById('rows-visible-label').textContent = slider.value;
     slider.addEventListener('input', applyRowsVisible);
     // apply after the first paint so a real row height is measurable
-    requestAnimationFrame(applyRowsVisible);
+    var frame = requestAnimationFrame(applyRowsVisible);
+    window.blastwa.addCleanup(function () { cancelAnimationFrame(frame); });
   })();
 
   async function refresh() {
     const { invoke } = window.blastwa;
     const res = await invoke('get_contacts');
     const list = Array.isArray(res) ? res : (res.contacts || []);
+    if (!document.getElementById('contacts-body')) return;
 
     document.getElementById('total-count').textContent = list.length;
     document.getElementById('contacts-empty').style.display = list.length ? 'none' : '';

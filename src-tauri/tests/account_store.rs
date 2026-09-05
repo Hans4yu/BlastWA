@@ -48,3 +48,17 @@ fn account_store_survives_reopen() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn account_store_does_not_leave_partial_write_artifacts() {
+    let dir = std::env::temp_dir().join(format!("blastwa_store_atomic_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    server::save_account_name(&dir, "atomic").unwrap();
+
+    assert!(!server::accounts_file(&dir).with_extension("json.tmp").exists());
+    assert_eq!(server::load_saved_accounts(&dir), vec!["atomic".to_string()]);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

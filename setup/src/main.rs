@@ -231,11 +231,29 @@ fn register_windows_uninstaller(install_dir: &Path, exe_path: &Path, uninstaller
 
 fn perform_uninstall() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let _ = hkcu.delete_subkey(format!(r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", APP_NAME));
+    let uninstall_path = format!(r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", APP_NAME);
+    let registered_install_dir = hkcu
+        .open_subkey(&uninstall_path)
+        .ok()
+        .and_then(|key| key.get_value::<String, _>("InstallLocation").ok())
+        .map(PathBuf::from);
 
     if let Some(desktop) = dirs::desktop_dir() {
         let lnk = desktop.join("BlastWA.lnk");
         let _ = std::fs::remove_file(lnk);
+        if let Ok(entries) = std::fs::read_dir(&desktop) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let is_profile_shortcut = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.starts_with("BlastWA - ") && name.ends_with(".lnk"))
+                    .unwrap_or(false);
+                if is_profile_shortcut {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
     }
 
     if let Some(data_dir) = dirs_localappdata() {
@@ -250,9 +268,28 @@ fn perform_uninstall() -> Result<(), String> {
         let _ = std::fs::remove_file(lnk);
     }
 
-    let install_dir = default_install_dir();
-    let installed_exe = install_dir.join("blastwa.exe");
-    let _ = std::fs::remove_file(installed_exe);
+    let _ = std::fs::remove_dir_all(app_data_dir());
+
+    let install_dir = registered_install_dir
+        .or_else(|| std::env::current_exe().ok().and_then(|path| path.parent().map(Path::to_path_buf)))
+        .unwrap_or_else(default_install_dir);
+    let current_exe = std::env::current_exe().ok();
+    if current_exe.as_ref().and_then(|path| path.parent()) != Some(install_dir.as_path()) {
+        let _ = std::fs::remove_dir_all(&install_dir);
+    } else {
+        let escaped = install_dir.to_string_lossy().replace('"', "\\\"");
+        let script = format!("timeout /t 2 /nobreak > nul & rmdir /s /q \"{escaped}\"");
+        let mut cleanup = Command::new("cmd.exe");
+        cleanup.args(["/C", &script]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cleanup.creation_flags(0x0800_0000 | 0x0000_0008);
+        }
+        let _ = cleanup.spawn();
+    }
+
+    let _ = hkcu.delete_subkey_all(uninstall_path);
 
     Ok(())
 }

@@ -29,14 +29,17 @@
 <div class="panel">
   <div class="panel-header">
     <span>WhatsApp Accounts</span>
-    <span class="panel-menu">&#9776;</span>
+    <span>
+      <button class="btn btn-sm btn-danger" id="btn-remove-selected" type="button" disabled>Remove Selected</button>
+      <button class="btn btn-sm btn-danger" id="btn-remove-all" type="button">Remove All</button>
+    </span>
   </div>
   <div class="panel-body flush">
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th style="width:30px">#</th>
+            <th style="width:30px"><input type="checkbox" id="accounts-select-all" aria-label="Select all accounts" /></th>
             <th>Name</th>
             <th style="width:90px">Status</th>
             <th style="width:80px">Port</th>
@@ -104,13 +107,13 @@
         // explicit semantics: connected requires whatsapp auth, not just a
         // live chrome session
         const badge = a.connected
-          ? '<span class="badge badge-green">Connected</span>'
+          ? '<span class="badge badge-green">Online</span>'
           : a.browser_running
             ? '<span class="badge badge-yellow">Waiting for scan</span>'
             : '<span class="badge badge-gray">Saved</span>';
         return `
         <tr>
-          <td>${i + 1}</td>
+          <td><input type="checkbox" class="account-select" data-account="${esc(a.name)}" aria-label="Select ${esc(a.name)}" /></td>
           <td><b>${esc(a.name)}</b></td>
           <td>${badge}</td>
           <td class="mono">${a.port != null ? esc(a.port) : '-'}</td>
@@ -132,9 +135,39 @@
         </tr>`;
       }).join('')
         : `<tr><td colspan="6"><div class="empty-state">No accounts yet. Click "+ Add Account" to scan a QR code.</div></td></tr>`;
+      document.querySelectorAll('.account-select').forEach(function (el) { el.onchange = updateSelectionState; });
+      updateSelectionState();
     } catch (e) {
       $('accounts-empty').style.display = '';
       $('accounts-empty').textContent = 'Failed to load accounts: ' + formatError(e);
+    }
+  }
+
+  function selectedAccounts() {
+    return Array.from(document.querySelectorAll('.account-select:checked'))
+      .map(function (el) { return el.dataset.account; });
+  }
+
+  function updateSelectionState() {
+    var button = document.getElementById('btn-remove-selected');
+    if (button) button.disabled = !selectedAccounts().length || removeBusy;
+  }
+
+  async function removeAccounts(names) {
+    if (removeBusy || !names.length) return;
+    if (!confirm('Remove ' + names.length + ' account' + (names.length === 1 ? '' : 's') + ' and delete profile data?')) return;
+    removeBusy = true;
+    updateSelectionState();
+    try {
+      for (var i = 0; i < names.length; i += 1) {
+        await window.blastwa.invoke('remove_account', { name: names[i], deleteProfile: true });
+      }
+      await renderAccounts();
+    } catch (e) {
+      alert('Failed to remove account: ' + formatError(e));
+    } finally {
+      removeBusy = false;
+      updateSelectionState();
     }
   }
 
@@ -142,6 +175,7 @@
   // per navigation; the document-level keydown listener is registered once
   // and cleaned up via addCleanup so it never stacks across visits
   var addModalBusy = false;
+  var removeBusy = false;
 
   function showAddError(msg) {
     var el = document.getElementById('add-account-error');
@@ -168,33 +202,36 @@
 
   window.addAccount = async function () {
     if (addModalBusy) return;
+    addModalBusy = true;
+    document.getElementById('btn-add-confirm').disabled = true;
     var input = document.getElementById('new-account-name');
     var name = input.value.trim();
     if (!name) {
       showAddError('Account name is required.');
       input.focus();
+      addModalBusy = false;
+      document.getElementById('btn-add-confirm').disabled = false;
       return;
     }
     if (name.length > 64) {
       showAddError('Account name is too long (max 64 characters).');
+      addModalBusy = false;
+      document.getElementById('btn-add-confirm').disabled = false;
       return;
     }
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
       showAddError('Only letters, numbers, underscore and dash are allowed.');
+      addModalBusy = false;
+      document.getElementById('btn-add-confirm').disabled = false;
       return;
     }
-    // client-side duplicate guard: the backend save silently no-ops on
-    // duplicates, so the error would never come back from the invoke
-    var accounts = await window.blastwa.invoke('list_accounts');
-    var existing = Array.isArray(accounts) ? accounts : (accounts.accounts || []);
-    if (existing.some(function (a) { return a.name === name; })) {
-      showAddError('An account named ' + name + ' already exists.');
-      return;
-    }
-
-    addModalBusy = true;
-    document.getElementById('btn-add-confirm').disabled = true;
     try {
+      var accounts = await window.blastwa.invoke('list_accounts');
+      var existing = Array.isArray(accounts) ? accounts : (accounts.accounts || []);
+      if (existing.some(function (a) { return a.name === name; })) {
+        showAddError('An account named ' + name + ' already exists.');
+        return;
+      }
       const res = await window.blastwa.invoke('add_account', { name: name });
       closeAddModal();
       // account is saved either way; surface session warnings honestly
@@ -215,6 +252,27 @@
     modal.dataset.wired = '1';
     document.getElementById('btn-add-cancel').onclick = closeAddModal;
     document.getElementById('btn-add-confirm').onclick = function () { window.addAccount(); };
+    document.getElementById('btn-remove-selected').onclick = function () { removeAccounts(selectedAccounts()); };
+    document.getElementById('btn-remove-all').onclick = async function () {
+      var names = Array.from(document.querySelectorAll('.account-select')).map(function (el) { return el.dataset.account; });
+      if (removeBusy || !names.length) return;
+      if (!confirm('Remove all ' + names.length + ' accounts and delete profile data?')) return;
+      removeBusy = true;
+      updateSelectionState();
+      try {
+        await window.blastwa.invoke('remove_all_accounts', { deleteProfiles: true });
+        await renderAccounts();
+      } catch (e) {
+        alert('Failed to remove accounts: ' + formatError(e));
+      } finally {
+        removeBusy = false;
+        updateSelectionState();
+      }
+    };
+    document.getElementById('accounts-select-all').onchange = function (ev) {
+      document.querySelectorAll('.account-select').forEach(function (el) { el.checked = ev.target.checked; });
+      updateSelectionState();
+    };
     modal.addEventListener('click', function (ev) {
       if (ev.target === modal) closeAddModal();
     });
@@ -296,12 +354,6 @@
   };
 
   window.removeAccount = async function (name) {
-    if (!confirm('Remove account ' + name + '?')) return;
-    try {
-      await window.blastwa.invoke('remove_account', { name });
-    } catch (e) {
-      alert('Failed to remove account: ' + formatError(e));
-    }
-    await renderAccounts();
+    await removeAccounts([name]);
   };
 </script>

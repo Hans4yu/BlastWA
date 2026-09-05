@@ -58,12 +58,14 @@ impl JsInjector {
             .eval_json(
                 r#"(function(){
                     try {
-                        var chatList = !!document.querySelector(
-                            '#pane-side, [data-testid="chat-list"], [aria-label="Chat list"], [data-tab]'
+                        var wpp = window.WPP;
+                        if (wpp && wpp.conn) {
+                            if (typeof wpp.conn.isAuthenticated === 'function' && wpp.conn.isAuthenticated()) return true;
+                            if (typeof wpp.conn.isMainReady === 'function' && wpp.conn.isMainReady()) return true;
+                        }
+                        return !!document.querySelector(
+                            '#pane-side, #side, [data-testid="chat-list"], [aria-label="Chat list"], [aria-label="Daftar chat"]'
                         );
-                        var legacyWid = null;
-                        try { legacyWid = window.localStorage.getItem('last-wid'); } catch(e) {}
-                        return chatList || !!legacyWid;
                     } catch(e) { return false; }
                 })()"#,
             )

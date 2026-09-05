@@ -6,6 +6,7 @@ edition.workspace = true
 [[bin]]
 name = "setup"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 winreg = "0.52"
@@ -23,4 +24,3 @@ windows-sys = { version = "0.48", features = [
     "Win32_System_LibraryLoader",
     "Win32_System_Threading"
 ] }
-

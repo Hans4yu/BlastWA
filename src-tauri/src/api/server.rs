@@ -63,6 +63,23 @@ fn ok<T>(data: T) -> (StatusCode, Json<ApiResponse<T>>) {
     )
 }
 
+fn write_accounts(app_dir: &Path, names: &[String]) -> std::io::Result<()> {
+    std::fs::create_dir_all(app_dir)?;
+    let path = accounts_file(app_dir);
+    let temp = path.with_extension("json.tmp");
+    let raw = serde_json::to_vec_pretty(names)?;
+    {
+        use std::io::Write;
+        let mut file = std::fs::File::create(&temp)?;
+        file.write_all(&raw)?;
+        file.sync_all()?;
+    }
+    if path.exists() {
+        std::fs::remove_file(&path)?;
+    }
+    std::fs::rename(temp, path)
+}
+
 fn err<T>(msg: &str, code: StatusCode) -> (StatusCode, Json<ApiResponse<T>>) {
     (code, Json(ApiResponse { ok: false, data: None, error: Some(msg.into()) }))
 }
@@ -149,15 +166,17 @@ pub fn save_account_name(app_dir: &Path, name: &str) -> std::io::Result<()> {
     if !names.iter().any(|n| n == name) {
         names.push(name.to_string());
     }
-    std::fs::create_dir_all(app_dir)?;
-    std::fs::write(accounts_file(app_dir), serde_json::to_string_pretty(&names)?)
+    write_accounts(app_dir, &names)
 }
 
 pub fn remove_saved_account(app_dir: &Path, name: &str) -> std::io::Result<()> {
     let mut names = load_saved_accounts(app_dir);
     names.retain(|n| n != name);
-    std::fs::create_dir_all(app_dir)?;
-    std::fs::write(accounts_file(app_dir), serde_json::to_string_pretty(&names)?)
+    write_accounts(app_dir, &names)
+}
+
+pub fn clear_saved_accounts(app_dir: &Path) -> std::io::Result<()> {
+    write_accounts(app_dir, &[])
 }
 
 async fn accounts(

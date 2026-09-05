@@ -30,7 +30,7 @@ env_logger = "0.11"
 winreg = "0.52"
 
 # tauri v2 wired behind gui feature; core stays testable headless
-tauri = { version = "2", optional = true }
+tauri = { version = "2", optional = true , features = [] }
 tauri-plugin-dialog = { version = "2", optional = true }
 
 [build-dependencies]
@@ -47,3 +47,4 @@ path = "src/lib.rs"
 [[bin]]
 name = "blastwa"
 path = "src/main.rs"
+required-features = ["gui"]

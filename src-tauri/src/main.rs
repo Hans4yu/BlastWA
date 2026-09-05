@@ -18,6 +18,7 @@ use blastwa_core::campaign::log_exporter::{
     interrupt_stale_running_records, load_campaign_records, CampaignRecord, LogEntry,
 };
 use blastwa_core::campaign::pipeline::Pipeline;
+use blastwa_core::account::service::{AccountService, AccountStatus};
 use blastwa_core::campaign::sender::{
     run_campaign, split_message_variants, CampaignConfig, ProgressEvent,
 };
@@ -36,6 +37,7 @@ struct AppCtx {
     contacts: Mutex<ContactList>,
     logs: Arc<Mutex<Vec<LogEntry>>>,
     templates: TemplateLibrary,
+    account_service: AccountService,
     /// short-lived wa-auth probe cache: name -> (probed_at, authenticated, number)
     auth_cache: Arc<Mutex<HashMap<String, (std::time::Instant, bool, Option<String>)>>>,
     /// accounts for which a one-shot wpp bootstrap was already kicked off
@@ -142,14 +144,13 @@ async fn register_live_session(name: &str, port: u16) {
 }
 
 #[tauri::command]
-async fn list_accounts(ctx: State<'_, AppCtx>) -> Result<Vec<serde_json::Value>, String> {
+async fn list_accounts(ctx: State<'_, AppCtx>) -> Result<Vec<AccountStatus>, String> {
     // identities come from disk; live state is probed per account:
     //   browser_running  = chrome/cdp session alive (page handle + evaluate ok)
     //   wa_authenticated = whatsapp web auth confirmed via DOM (JsInjector)
     //   connected        = browser_running && wa_authenticated
     //   number           = whatsapp identity, only when authenticated
-    let app_dir = AppConfig::app_dir();
-    let saved = server::load_saved_accounts(&app_dir);
+    let saved = ctx.account_service.load_names();
     let reg = server::sessions_registry();
     let live = reg.lock().await;
 
@@ -166,14 +167,14 @@ async fn list_accounts(ctx: State<'_, AppCtx>) -> Result<Vec<serde_json::Value>,
         let (browser_running, wa_auth, number) = probe_account_state(&ctx, name).await;
         let port = live_session_port(name).await;
         let connected = browser_running && wa_auth;
-        out.push(serde_json::json!({
-            "name": name,
-            "port": if browser_running { port } else { None },
-            "browser_running": browser_running,
-            "wa_authenticated": wa_auth,
-            "connected": connected,
-            "number": number,
-        }));
+        out.push(AccountStatus {
+            name: name.clone(),
+            port: if browser_running { port } else { None },
+            browser_running,
+            wa_authenticated: wa_auth,
+            connected,
+            number,
+        });
     }
     Ok(out)
 }
@@ -221,7 +222,7 @@ async fn probe_account_state(
     let injector = blastwa_core::browser::js_injector::JsInjector::new(&page);
     match injector.is_logged_in().await {
         Ok(auth) => {
-            let mut number = if auth {
+            let number = if auth {
                 injector
                     .my_user_id()
                     .await
@@ -301,15 +302,15 @@ async fn probe_account_state(
 
 #[tauri::command]
 async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    let _mutation = ctx.account_service.lock().await;
     let name = name.trim().to_string();
     validate_account_name(&name)?;
 
-    let app_dir = AppConfig::app_dir();
-    if server::load_saved_accounts(&app_dir).iter().any(|n| n == &name) {
+    if ctx.account_service.load_names().iter().any(|n| n == &name) {
         return Err(format!("Account \"{name}\" already exists"));
     }
 
-    server::save_account_name(&app_dir, &name)
+    ctx.account_service.save_name(&name)
         .map_err(|e| format!("saving account: {e}"))?;
 
     // session launch is best effort; failure is reported as a warning,
@@ -333,8 +334,7 @@ async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json:
         register_live_session(&name, p).await;
         // the user may have removed this account while its session was still
         // launching — a finished launch must not resurrect a removed identity
-        let app_dir = AppConfig::app_dir();
-        if !server::load_saved_accounts(&app_dir).iter().any(|n| n == &name) {
+        if !ctx.account_service.load_names().iter().any(|n| n == &name) {
             let reg = server::sessions_registry();
             let mut list = reg.lock().await;
             list.retain(|(n, _): &(String, u16)| n != &name);
@@ -359,6 +359,7 @@ async fn rename_account(
     new_name: String,
     ctx: State<'_, AppCtx>,
 ) -> Result<serde_json::Value, String> {
+    let _mutation = ctx.account_service.lock().await;
     let old_name = old_name.trim().to_string();
     let new_name = new_name.trim().to_string();
     validate_account_name(&new_name)?;
@@ -366,8 +367,7 @@ async fn rename_account(
         return Ok(serde_json::json!({ "ok": true, "name": new_name }));
     }
 
-    let app_dir = AppConfig::app_dir();
-    let saved = server::load_saved_accounts(&app_dir);
+    let saved = ctx.account_service.load_names();
     if !saved.iter().any(|n| n == &old_name) {
         return Err(format!("account {old_name} does not exist"));
     }
@@ -407,15 +407,36 @@ async fn rename_account(
         }
     }
 
-    server::remove_saved_account(&app_dir, &old_name)
+    ctx.account_service.remove_name(&old_name)
         .map_err(|e| format!("updating accounts: {e}"))?;
-    server::save_account_name(&app_dir, &new_name)
+    ctx.account_service.save_name(&new_name)
         .map_err(|e| format!("updating accounts: {e}"))?;
+    ctx.auth_cache.lock().unwrap().remove(&old_name);
+    ctx.wpp_bootstrapped.lock().unwrap().remove(&old_name);
     Ok(serde_json::json!({ "ok": true, "name": new_name }))
 }
 
 #[tauri::command]
-async fn remove_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+async fn remove_account(
+    name: String,
+    delete_profile: Option<bool>,
+    ctx: State<'_, AppCtx>,
+) -> Result<serde_json::Value, String> {
+    let _mutation = ctx.account_service.lock().await;
+    let name = name.trim().to_string();
+    validate_account_name(&name)?;
+
+    if delete_profile.unwrap_or(true) {
+        let profile_dir = ctx.account_service.account_dir(&name);
+        if profile_dir.exists() {
+            std::fs::remove_dir_all(&profile_dir).map_err(|e| {
+                format!(
+                    "removing account profile failed: {e}; close the account browser and retry"
+                )
+            })?;
+        }
+    }
+    remove_desktop_profile_shortcut(&name);
     // drop live session entry
     let reg = server::sessions_registry();
     {
@@ -423,10 +444,42 @@ async fn remove_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_js
         list.retain(|(n, _): &(String, u16)| n != &name);
     }
     // drop saved identity
-    let app_dir = AppConfig::app_dir();
-    server::remove_saved_account(&app_dir, &name)
+    ctx.account_service.remove_name(&name)
         .map_err(|e| format!("removing account: {e}"))?;
+    ctx.auth_cache.lock().unwrap().remove(&name);
+    ctx.wpp_bootstrapped.lock().unwrap().remove(&name);
+    ctx.pipeline.evict_page(&name).await;
     Ok(serde_json::json!({ "ok": true }))
+}
+
+#[tauri::command]
+async fn remove_all_accounts(delete_profiles: Option<bool>, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    let _mutation = ctx.account_service.lock().await;
+    let names = ctx.account_service.load_names();
+    if delete_profiles.unwrap_or(true) {
+        for name in &names {
+            let profile_dir = ctx.account_service.account_dir(name);
+            if profile_dir.exists() {
+                std::fs::remove_dir_all(&profile_dir).map_err(|e| {
+                    format!("removing account profile '{name}' failed: {e}; close its browser and retry")
+                })?;
+            }
+        }
+    }
+    {
+        let reg = server::sessions_registry();
+        let mut list = reg.lock().await;
+        list.retain(|(name, _): &(String, u16)| !names.iter().any(|saved| saved == name));
+    }
+    for name in &names {
+        remove_desktop_profile_shortcut(name);
+        ctx.auth_cache.lock().unwrap().remove(name);
+        ctx.wpp_bootstrapped.lock().unwrap().remove(name);
+        ctx.pipeline.evict_page(name).await;
+    }
+    ctx.account_service.clear_names()
+        .map_err(|e| format!("clearing accounts: {e}"))?;
+    Ok(serde_json::json!({ "ok": true, "removed": names.len() }))
 }
 
 #[tauri::command]
@@ -1283,7 +1336,7 @@ fn preview_spintax(
 }
 
 #[tauri::command]
-fn get_wpp_version(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+fn get_wpp_version(_ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
         "local": wpp_updater::current_version(&AppConfig::app_dir()),
     }))
@@ -1355,6 +1408,16 @@ fn create_desktop_profile_shortcut(profile_name: &str, exe_path: &std::path::Pat
 fn create_desktop_profile_shortcut(_profile_name: &str, _exe_path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
+
+#[cfg(windows)]
+fn remove_desktop_profile_shortcut(profile_name: &str) {
+    if let Some(desktop_dir) = dirs::desktop_dir() {
+        let _ = std::fs::remove_file(desktop_dir.join(format!("BlastWA - {profile_name}.lnk")));
+    }
+}
+
+#[cfg(not(windows))]
+fn remove_desktop_profile_shortcut(_profile_name: &str) {}
 
 /// spawn a fully isolated second instance bound to its own data root.
 /// the child re-enters main() which resolves --profile before any config
@@ -1489,6 +1552,7 @@ fn main() {
 
     let templates = TemplateLibrary::new(&paths.templates);
 
+    let account_service = AccountService::new(AppConfig::app_dir(), paths.accounts.clone());
     let ctx = AppCtx {
         cfg: Mutex::new(cfg),
         paths,
@@ -1499,6 +1563,7 @@ fn main() {
         templates,
         auth_cache: Arc::new(Mutex::new(HashMap::new())),
         wpp_bootstrapped: Arc::new(Mutex::new(HashMap::new())),
+        account_service,
     };
 
     tauri::Builder::default()
@@ -1515,7 +1580,7 @@ fn main() {
         })
         .manage(ctx)
         .invoke_handler(tauri::generate_handler![
-            list_accounts, add_account, remove_account, rename_account, open_browser,
+            list_accounts, add_account, remove_account, remove_all_accounts, rename_account, open_browser,
             start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
