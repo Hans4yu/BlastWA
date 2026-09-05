@@ -53,4 +53,6 @@ node scripts/check_sending_page.js                    # PASSED
 
 ## Exact Next Move
 
-Run the headful smoke test above and record the results in this file. There is no pending refactor work: the modularization milestone is complete and the tree is clean at 4f3bca3.
+**Smoke test (2026-09-06, via WebView2 CDP on the installed release build): FOUND AND FIXED a production-only regression.** Tauri's compile-time CSP modification appended a sha256 hash to `script-src`, which per the CSP spec makes the declared `'unsafe-inline'` ignored — every dynamically re-created SPA page script was silently blocked (`init_dashboard` undefined, dashboard stuck on "Loading accounts...", Add Account button dead). Fixed by excluding `script-src` from Tauri's CSP modification (`dangerousDisableAssetCspModification: ["script-src"]` in tauri.conf.json — validated against the current v2 docs). Also fixed a dashboard cosmetic bug (the "Loading accounts..." placeholder now hides once the list renders). Verified live: zero CSP violations, init runs, modal open/validate/cancel works. Commit 0386e34; fixed `blastwa.exe` already deployed to `%LOCALAPPDATA%\Programs\BlastWA`.
+
+Still needs a live phone: QR scan → Online badge transition, real message send, Remove Selected/All with profile dirs + `.lnk` cleanup.
