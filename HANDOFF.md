@@ -53,11 +53,8 @@ node scripts/check_sending_page.js                    # PASSED
 
 ## Exact Next Move
 
-**Runtime bug sweep (2026-09-06, CDP against the installed release build): all 8 pages clean, two more real bugs found and fixed (commit 577c7a9, exe already redeployed).**
+**Uninstaller regression (user-reported, 2026-09-06): found and FIXED (commit 7a6ed04).** The uninstall dialog claimed success while leaving `blastwa.exe`, `uninstall.exe`, and `%APPDATA%\BlastWA` behind. Root causes: no taskkill of a running app; the detached self-cleanup used `timeout /t 2` (exits instantly without a console → rmdir fired while the uninstaller's own MessageBox still held locks); the cleanup cmd inherited the install dir as CWD; and an inline `if ... exit & ping` one-liner parsed as a single conditional, skipping the delay. The sweeper is now a generated temp batch file with ping-based retry (~2 min) that removes the install dir + appdata after the uninstaller exits and deletes itself. Verified end-to-end on the real install: after OK, install dir, appdata, HKCU key, and shortcuts are all gone. Environmental note: local security policy blocks shell-spawned executables named `uninstall.exe` (Explorer double-click unaffected) — the logic is name-independent via `--uninstall`.
 
-1. **`confirm()` shim bug (critical):** tauri-plugin-dialog replaces `window.confirm` with an async fn returning a Promise, so `if (!confirm(...)) return` guards never blocked — Remove Selected/All, Delete Template, Keep Valid Numbers, and Clear Contacts all executed before the user answered. All five call sites now `await confirm(...)`.
-2. **`find_chrome()` dead code:** a config.json that never went through setup.exe left `chrome_path` empty, breaking Open Browser despite Chrome being installed. `launch_session` now falls back to registry/filesystem detection and persists the result; verified live (`add_account` → `connected:true, port:9222`).
-
-Also verified live: REST API token auth (no/wrong token → 401, valid → 200, malformed blast → 400), profile-lock removal guard behaves as documented (removal fails while the account's Chrome is open, succeeds after), Settings token panel + health diagnostics render, `window.confirm`/`alert` shim behavior documented for future pages: **always `await confirm()` in this codebase**.
+The machine is currently fully de-installed. To install the fixed build: `D:\Tes\blastwa\target\release\setup.exe`.
 
 Still needs a live phone: QR scan → Online badge transition, real message send, autoreply against a live session.
