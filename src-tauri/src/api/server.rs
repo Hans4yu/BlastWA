@@ -151,11 +151,11 @@ struct AccountInfo {
 }
 
 /// live session registry — pipeline pushes/removes, this just reads
-static LIVE_SESSIONS: std::sync::OnceLock<
-    Arc<tokio::sync::Mutex<Vec<(String, u16)>>>,
-> = std::sync::OnceLock::new();
+type SessionList = Arc<tokio::sync::Mutex<Vec<(String, u16)>>>;
 
-pub fn sessions_registry() -> Arc<tokio::sync::Mutex<Vec<(String, u16)>>> {
+static LIVE_SESSIONS: std::sync::OnceLock<SessionList> = std::sync::OnceLock::new();
+
+pub fn sessions_registry() -> SessionList {
     LIVE_SESSIONS
         .get_or_init(|| Arc::new(tokio::sync::Mutex::new(Vec::new())))
         .clone()

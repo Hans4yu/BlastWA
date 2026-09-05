@@ -84,6 +84,7 @@ pub struct CampaignStats {
     pub cancelled: AtomicBool,
 }
 
+#[allow(clippy::too_many_arguments)] // sender knobs are explicit by design
 pub async fn run_campaign(
     injector: JsInjector,
     contacts: &ContactList,

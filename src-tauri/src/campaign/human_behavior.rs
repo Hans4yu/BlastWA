@@ -165,7 +165,7 @@ impl HumanBehaviorEngine {
         if success {
             self.consecutive_successes += 1;
             // decay backoff gently: every 10 clean sends drop a level
-            if self.backoff_level > 0 && self.consecutive_successes % 10 == 0 {
+            if self.backoff_level > 0 && self.consecutive_successes.is_multiple_of(10) {
                 self.backoff_level -= 1;
             }
         } else {
@@ -288,7 +288,7 @@ impl HumanBehaviorEngine {
     }
 
     /// shuffle a window of contacts so send order doesn't mirror import order
-    pub fn jitter_order(&self, window: &mut Vec<usize>) {
+    pub fn jitter_order(&self, window: &mut [usize]) {
         if !self.config.enable_order_jitter || window.len() < 2 {
             return;
         }

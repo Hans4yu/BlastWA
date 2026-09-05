@@ -85,16 +85,17 @@
         <label>Port</label>
         <input type="number" id="api-port" value="8765" min="1024" max="65535" />
       </div>
+      <div class="field" style="margin-bottom:0">
+        <label>API token (sent as the X-BlastWA-Token header on every /api call)</label>
+        <div class="row" style="gap:8px">
+          <input type="text" id="api-token" readonly style="flex:1" />
+          <button class="btn btn-sm" id="btn-copy-token" type="button">Copy</button>
+        </div>
+      </div>
       <p style="margin:0 0 8px;color:var(--text-dim);font-size:11px">
         On port collision the server walks up to a free port; the effective port is saved back here.
       </p>
-      <pre class="code-block mono">curl -X POST http://127.0.0.1:8765/api/blast \
-  -H "Content-Type: application/json" \
-  -d '{"account":"akun1","contacts":["6281234567890"],
-       "message":"Hai [[firstname]]!","delay_min_s":3,"delay_max_s":9}'
-
-curl http://127.0.0.1:8765/api/status
-curl -X POST http://127.0.0.1:8765/api/stop</pre>
+      <pre class="code-block mono" id="api-curl-sample"></pre>
     </div>
   </div>
 
@@ -123,6 +124,36 @@ curl -X POST http://127.0.0.1:8765/api/stop</pre>
     $('api-enabled').checked = !!cfg.api_enabled;
     $('api-port').value = cfg.api_port ?? 8765;
     $('active-profile').value = cfg.active_profile || '(default, no isolation)';
+
+    // token + live curl sample so webhook callers can copy a working request
+    const token = cfg.api_token || '';
+    $('api-token').value = token || '(token unavailable)';
+    const port = cfg.api_port ?? 8765;
+    $('api-curl-sample').textContent =
+      'curl -X POST http://127.0.0.1:' + port + '/api/blast \\\n' +
+      '  -H "X-BlastWA-Token: ' + (token || 'YOUR_TOKEN') + '" \\\n' +
+      '  -H "Content-Type: application/json" \\\n' +
+      '  -d \'{"account":"akun1","contacts":["6281234567890"],\n' +
+      '       "message":"Hai [[firstname]]!","delay_min_s":3,"delay_max_s":9}\'\n\n' +
+      'curl -H "X-BlastWA-Token: ' + (token || 'YOUR_TOKEN') + '" \\\n' +
+      '  http://127.0.0.1:' + port + '/api/status\n\n' +
+      'curl -X POST -H "X-BlastWA-Token: ' + (token || 'YOUR_TOKEN') + '" \\\n' +
+      '  http://127.0.0.1:' + port + '/api/stop';
+
+    $('btn-copy-token').onclick = async () => {
+      const value = $('api-token').value;
+      if (!value || value === '(token unavailable)') return;
+      try {
+        await navigator.clipboard.writeText(value);
+        $('btn-copy-token').textContent = 'Copied!';
+      } catch (e) {
+        // clipboard API can be blocked in the webview; fall back to select+copy
+        $('api-token').select();
+        document.execCommand('copy');
+        $('btn-copy-token').textContent = 'Copied!';
+      }
+      setTimeout(() => { $('btn-copy-token').textContent = 'Copy'; }, 1500);
+    };
 
     const refreshHealth = async () => {
       const output = $('health-diagnostics');

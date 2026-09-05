@@ -193,10 +193,7 @@ fn merge_chrome_fallback(profile: &AppConfig, classic: &AppConfig) -> AppConfig 
 }
 
 fn resolve_profile_config(profile: AppConfig, classic: Result<AppConfig>) -> AppConfig {
-    let classic = match classic {
-        Ok(config) => config,
-        Err(_) => AppConfig::default(),
-    };
+    let classic = classic.unwrap_or_default();
     merge_chrome_fallback(&profile, &classic)
 }
 
@@ -270,7 +267,7 @@ impl AppConfig {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let raw = fs::read_to_string(&path).context("reading config.json")?;
+        let raw = fs::read_to_string(path).context("reading config.json")?;
         match serde_json::from_str(&raw) {
             Ok(config) => Ok(config),
             Err(error) => {

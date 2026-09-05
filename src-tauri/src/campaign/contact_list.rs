@@ -40,7 +40,7 @@ impl ContactList {
             // tolerate | , ; and tab separators; auto-detect which column
             // holds the number (files often come as "name,628..." from excel)
             let parts: Vec<&str> = line
-                .split(|c| c == '|' || c == ',' || c == ';' || c == '\u{0009}')
+                .split(['|', ',', ';', '\t'])
                 .map(|p| p.trim())
                 .filter(|p| !p.is_empty())
                 .collect();

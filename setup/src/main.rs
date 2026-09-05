@@ -512,7 +512,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
 
             HWND_PROGRESS = CreateWindowExW(
                 0, to_wide("msctls_progress32\0").as_ptr(), std::ptr::null(),
-                WS_CHILD | PBS_SMOOTH as u32,
+                WS_CHILD | PBS_SMOOTH,
                 180, 160, 375, 20, hwnd, IDC_PROGRESS as HMENU, hinstance, std::ptr::null(),
             );
 
@@ -634,7 +634,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
                 DrawIconEx(hdc, 48, 35, HICON_APP, 64, 64, 0, 0, DI_NORMAL);
             }
 
-            SetBkMode(hdc, TRANSPARENT as u32);
+            SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, rgb(255, 255, 255));
             SelectObject(hdc, FONT_TITLE);
             TextOutW(hdc, 40, 115, to_wide("BlastWA\0").as_ptr(), 7);
@@ -722,11 +722,11 @@ fn main() {
     }
 
     unsafe {
-        let mut icc = INITCOMMONCONTROLSEX {
+        let icc = INITCOMMONCONTROLSEX {
             dwSize: std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32,
             dwICC: ICC_PROGRESS_CLASS,
         };
-        InitCommonControlsEx(&mut icc);
+        InitCommonControlsEx(&icc);
 
         let class_name = to_wide("BlastWASetupWizardClass\0");
         let hinstance = GetModuleHandleW(std::ptr::null());

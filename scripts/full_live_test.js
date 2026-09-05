@@ -3,9 +3,11 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const MAIN_TARGET = '62895410710058';
-const SENDER_NUMBER = '6282132102060';
-const ASSETS_DIR = 'C:\\Users\\Farhan\\AppData\\Local\\Temp\\blastwa_test_assets';
+// override via env so the suite runs on any phone/asset location:
+//   TEST_TARGET=628xxx TEST_PHONE=628yyy node scripts/full_live_test.js
+const MAIN_TARGET = process.env.TEST_TARGET || '62895410710058';
+const SENDER_NUMBER = process.env.TEST_PHONE || '6282132102060';
+const ASSETS_DIR = process.env.TEST_ASSETS_DIR || path.join(require('os').tmpdir(), 'blastwa_test_assets');
 
 function getList(port = 9223) {
   return new Promise((resolve, reject) => {
@@ -21,7 +23,7 @@ function getList(port = 9223) {
 
 (async () => {
   console.log('=====================================================');
-  console.log('🚀 BLASTWA MASTER AUTO-TESTING SUITE (SENDER: 6282132102060 -> TARGET: 62895410710058)');
+  console.log(`🚀 BLASTWA MASTER AUTO-TESTING SUITE (SENDER: ${SENDER_NUMBER} -> TARGET: ${MAIN_TARGET})`);
   console.log('=====================================================');
 
   let pages = [];
@@ -73,7 +75,7 @@ function getList(port = 9223) {
   };
 
   // 1. TAHAP DETEKSI AKUN
-  console.log('\n[1/6] Mendeteksi Akun Pengirim (6282132102060)...');
+  console.log(`\n[1/6] Mendeteksi Akun Pengirim (${SENDER_NUMBER})...`);
   await evalJs(`location.hash = '#/dashboard'; 1`);
   await new Promise((r) => setTimeout(r, 1200));
 
