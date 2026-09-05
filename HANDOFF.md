@@ -53,6 +53,11 @@ node scripts/check_sending_page.js                    # PASSED
 
 ## Exact Next Move
 
-**Smoke test (2026-09-06, via WebView2 CDP on the installed release build): FOUND AND FIXED a production-only regression.** Tauri's compile-time CSP modification appended a sha256 hash to `script-src`, which per the CSP spec makes the declared `'unsafe-inline'` ignored — every dynamically re-created SPA page script was silently blocked (`init_dashboard` undefined, dashboard stuck on "Loading accounts...", Add Account button dead). Fixed by excluding `script-src` from Tauri's CSP modification (`dangerousDisableAssetCspModification: ["script-src"]` in tauri.conf.json — validated against the current v2 docs). Also fixed a dashboard cosmetic bug (the "Loading accounts..." placeholder now hides once the list renders). Verified live: zero CSP violations, init runs, modal open/validate/cancel works. Commit 0386e34; fixed `blastwa.exe` already deployed to `%LOCALAPPDATA%\Programs\BlastWA`.
+**Runtime bug sweep (2026-09-06, CDP against the installed release build): all 8 pages clean, two more real bugs found and fixed (commit 577c7a9, exe already redeployed).**
 
-Still needs a live phone: QR scan → Online badge transition, real message send, Remove Selected/All with profile dirs + `.lnk` cleanup.
+1. **`confirm()` shim bug (critical):** tauri-plugin-dialog replaces `window.confirm` with an async fn returning a Promise, so `if (!confirm(...)) return` guards never blocked — Remove Selected/All, Delete Template, Keep Valid Numbers, and Clear Contacts all executed before the user answered. All five call sites now `await confirm(...)`.
+2. **`find_chrome()` dead code:** a config.json that never went through setup.exe left `chrome_path` empty, breaking Open Browser despite Chrome being installed. `launch_session` now falls back to registry/filesystem detection and persists the result; verified live (`add_account` → `connected:true, port:9222`).
+
+Also verified live: REST API token auth (no/wrong token → 401, valid → 200, malformed blast → 400), profile-lock removal guard behaves as documented (removal fails while the account's Chrome is open, succeeds after), Settings token panel + health diagnostics render, `window.confirm`/`alert` shim behavior documented for future pages: **always `await confirm()` in this codebase**.
+
+Still needs a live phone: QR scan → Online badge transition, real message send, autoreply against a live session.
