@@ -156,7 +156,10 @@
 
   async function removeAccounts(names) {
     if (removeBusy || !names.length) return;
-    if (!confirm('Remove ' + names.length + ' account' + (names.length === 1 ? '' : 's') + ' and delete profile data?')) return;
+    // tauri's dialog plugin shims window.confirm into an async fn returning
+    // a Promise; without await the guard is always truthy and removal runs
+    // before the user answers
+    if (!(await confirm('Remove ' + names.length + ' account' + (names.length === 1 ? '' : 's') + ' and delete profile data?'))) return;
     removeBusy = true;
     updateSelectionState();
     try {
@@ -256,7 +259,7 @@
     document.getElementById('btn-remove-all').onclick = async function () {
       var names = Array.from(document.querySelectorAll('.account-select')).map(function (el) { return el.dataset.account; });
       if (removeBusy || !names.length) return;
-      if (!confirm('Remove all ' + names.length + ' accounts and delete profile data?')) return;
+      if (!(await confirm('Remove all ' + names.length + ' accounts and delete profile data?'))) return;
       removeBusy = true;
       updateSelectionState();
       try {

@@ -343,7 +343,7 @@
 
     document.getElementById('btn-keep-valid').addEventListener('click', async () => {
       if (!validNumbers.length) return;
-      if (!confirm(`Keep only the ${validNumbers.length} valid numbers and drop the rest?`)) return;
+      if (!(await confirm(`Keep only the ${validNumbers.length} valid numbers and drop the rest?`))) return;
       try {
         const r = await invoke('keep_contacts_only', { validNumbers });
         const kept = (r && r.kept) ?? 0;
@@ -521,7 +521,7 @@
   }
 
   async function clearAll() {
-    if (!confirm('Clear entire contact list?')) return;
+    if (!(await confirm('Clear entire contact list?'))) return;
     await window.blastwa.invoke('clear_contacts');
     refresh();
   }

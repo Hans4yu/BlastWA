@@ -77,7 +77,22 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
         list.retain(|(n, _): &(String, u16)| n != name);
     }
 
-    let chrome_path = ctx.cfg.lock().unwrap().chrome_path.clone();
+    let chrome_path = {
+        let mut cfg = ctx.cfg.lock().unwrap();
+        if cfg.chrome_path.is_empty() {
+            // config never initialized (setup.exe never ran): fall back to
+            // registry/filesystem detection and persist it for later runs
+            if let Some((path, version)) = blastwa_core::browser::chrome_detect::find_chrome() {
+                cfg.chrome_path = path.to_string_lossy().to_string();
+                cfg.chrome_version = version;
+                if let Err(e) = cfg.save() {
+                    log::warn!("persisting detected chrome path: {e:#}");
+                }
+                log::info!("auto-detected chrome: {}", cfg.chrome_path);
+            }
+        }
+        cfg.chrome_path.clone()
+    };
     let accounts_dir = ctx.paths.accounts.clone();
     let owned = name.to_string();
     let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
