@@ -8,7 +8,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -26,6 +28,21 @@ pub struct AppState {
     pub blast_requested: Arc<tokio::sync::mpsc::Sender<BlastRequest>>,
     /// current campaign cancel token; overwritten at each campaign start
     pub stop_flag: Arc<tokio::sync::Mutex<tokio_util::sync::CancellationToken>>,
+    pub api_token: Arc<String>,
+}
+
+fn token_is_valid(headers: &HeaderMap, expected: &str) -> bool {
+    let supplied = headers
+        .get("x-blastwa-token")
+        .and_then(|value| value.to_str().ok());
+    supplied == Some(expected)
+}
+
+async fn authorize(State(state): State<AppState>, headers: HeaderMap, request: axum::http::Request<axum::body::Body>, next: Next) -> Response {
+    if !token_is_valid(&headers, state.api_token.as_str()) {
+        return (StatusCode::UNAUTHORIZED, "missing or invalid X-BlastWA-Token").into_response();
+    }
+    next.run(request).await
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -64,10 +81,13 @@ fn ok<T>(data: T) -> (StatusCode, Json<ApiResponse<T>>) {
 }
 
 fn write_accounts(app_dir: &Path, names: &[String]) -> std::io::Result<()> {
-    std::fs::create_dir_all(app_dir)?;
     let path = accounts_file(app_dir);
+    let _lock = crate::config::settings::FileLock::acquire(&path)?;
     let temp = path.with_extension("json.tmp");
-    let raw = serde_json::to_vec_pretty(names)?;
+    let raw = serde_json::to_vec_pretty(&serde_json::json!({
+        "schema_version": crate::config::settings::STORAGE_SCHEMA_VERSION,
+        "accounts": names,
+    }))?;
     {
         use std::io::Write;
         let mut file = std::fs::File::create(&temp)?;
@@ -155,10 +175,18 @@ pub fn load_saved_accounts(app_dir: &Path) -> Vec<String> {
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    serde_json::from_str(&raw).unwrap_or_else(|e| {
-        log::warn!("accounts.json unreadable ({}), starting from empty list", e);
-        Vec::new()
-    })
+    match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(value) => value
+            .as_array()
+            .map(|names| names.iter().filter_map(|name| name.as_str().map(str::to_string)).collect())
+            .or_else(|| value.get("accounts").and_then(|names| names.as_array()).map(|names| names.iter().filter_map(|name| name.as_str().map(str::to_string)).collect()))
+            .unwrap_or_default(),
+        Err(error) => {
+            crate::config::settings::backup_corrupt_file(&path);
+            log::warn!("accounts.json unreadable ({}), starting from empty list", error);
+            Vec::new()
+        }
+    }
 }
 
 pub fn save_account_name(app_dir: &Path, name: &str) -> std::io::Result<()> {
@@ -225,6 +253,7 @@ pub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> Result
         .route("/api/status", get(status))
         .route("/api/accounts", get(accounts))
         .route("/api/stop", post(stop))
+        .layer(middleware::from_fn_with_state(state.clone(), authorize))
         .with_state(state);
 
     let addr = listener.local_addr()?;
@@ -236,6 +265,17 @@ pub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn token_validation_rejects_missing_token() {
+        assert!(!token_is_valid(&HeaderMap::new(), "test-token"));
+    }
+
+    #[test]
+    fn token_validation_accepts_matching_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-blastwa-token", "test-token".parse().unwrap());
+        assert!(token_is_valid(&headers, "test-token"));
+    }
 
     #[tokio::test]
     async fn bind_walks_up_when_port_taken() {
@@ -254,5 +294,28 @@ mod tests {
         drop(probe);
         let (_listener, effective) = bind_listener(port).await.unwrap();
         assert_eq!(effective, port);
+    }
+
+    #[test]
+    fn legacy_account_array_is_still_readable() {
+        let dir = std::env::temp_dir().join(format!("blastwa_legacy_accounts_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(accounts_file(&dir), r#"["legacy"]"#).unwrap();
+        assert_eq!(load_saved_accounts(&dir), vec!["legacy"]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn corrupt_account_file_is_backed_up() {
+        let dir = std::env::temp_dir().join(format!("blastwa_corrupt_accounts_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(accounts_file(&dir), "{broken").unwrap();
+        assert!(load_saved_accounts(&dir).is_empty());
+        assert!(std::fs::read_dir(&dir).unwrap().any(|entry| {
+            entry.ok().and_then(|e| e.file_name().into_string().ok()).is_some_and(|name| name.contains("corrupt-"))
+        }));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

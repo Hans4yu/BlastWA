@@ -18,7 +18,10 @@ use blastwa_core::campaign::log_exporter::{
     interrupt_stale_running_records, load_campaign_records, CampaignRecord, LogEntry,
 };
 use blastwa_core::campaign::pipeline::Pipeline;
-use blastwa_core::account::service::{AccountService, AccountStatus};
+use blastwa_core::account::{registry, service::{AccountService, AccountStatus}};
+use commands::accounts as account_commands;
+
+mod commands;
 use blastwa_core::campaign::sender::{
     run_campaign, split_message_variants, CampaignConfig, ProgressEvent,
 };
@@ -46,42 +49,18 @@ struct AppCtx {
 
 // ---------- accounts ----------
 
-fn validate_account_name(name: &str) -> Result<(), String> {
-    if name.is_empty() {
-        return Err("Account name is required".into());
-    }
-    if name.len() > 64 {
-        return Err("Account name is too long (max 64 characters)".into());
-    }
-    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-        return Err(
-            "Account name may only contain letters, numbers, underscore and dash".into(),
-        );
-    }
-    Ok(())
-}
-
 /// port of the live chrome session for this account, if any
 async fn live_session_port(name: &str) -> Option<u16> {
-    let reg = server::sessions_registry();
-    let list = reg.lock().await;
-    list.iter()
-        .find(|(n, _): &&(String, u16)| n == name)
-        .map(|(_, p)| *p)
+    account_commands::live_session_port(name).await
 }
 
 /// cheap liveness probe: is the cdp port still accepting tcp connections?
 async fn session_alive(port: u16) -> bool {
-    tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok()
+    account_commands::session_alive(port).await
 }
 
 fn format_launch_failure(launch_error: Option<&str>) -> String {
-    match launch_error {
-        Some(error) => format!(
-            "chrome launch failed: {error}; chrome cdp endpoint not found after launch"
-        ),
-        None => "chrome cdp endpoint not found after launch".to_string(),
-    }
+    account_commands::format_launch_failure(launch_error)
 }
 
 
@@ -136,15 +115,10 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
 }
 
 async fn register_live_session(name: &str, port: u16) {
-    let reg = server::sessions_registry();
-    let mut list = reg.lock().await;
-    if !list.iter().any(|(n, _): &(String, u16)| n == name) {
-        list.push((name.to_string(), port));
-    }
+    account_commands::register_live_session(name, port).await
 }
 
-#[tauri::command]
-async fn list_accounts(ctx: State<'_, AppCtx>) -> Result<Vec<AccountStatus>, String> {
+async fn list_accounts_impl(ctx: State<'_, AppCtx>) -> Result<Vec<AccountStatus>, String> {
     // identities come from disk; live state is probed per account:
     //   browser_running  = chrome/cdp session alive (page handle + evaluate ok)
     //   wa_authenticated = whatsapp web auth confirmed via DOM (JsInjector)
@@ -300,11 +274,10 @@ async fn probe_account_state(
     }
 }
 
-#[tauri::command]
-async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+async fn add_account_impl(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
     let _mutation = ctx.account_service.lock().await;
     let name = name.trim().to_string();
-    validate_account_name(&name)?;
+    account_commands::validate_name(&name)?;
 
     if ctx.account_service.load_names().iter().any(|n| n == &name) {
         return Err(format!("Account \"{name}\" already exists"));
@@ -353,8 +326,7 @@ async fn add_account(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json:
 /// rename an account: identity in accounts.json plus its chrome profile dir.
 /// refuses while the browser is running — windows locks the user-data-dir
 /// of a live chrome, so the rename would half-fail and orphan the session.
-#[tauri::command]
-async fn rename_account(
+async fn rename_account_impl(
     old_name: String,
     new_name: String,
     ctx: State<'_, AppCtx>,
@@ -362,7 +334,7 @@ async fn rename_account(
     let _mutation = ctx.account_service.lock().await;
     let old_name = old_name.trim().to_string();
     let new_name = new_name.trim().to_string();
-    validate_account_name(&new_name)?;
+    account_commands::validate_name(&new_name)?;
     if new_name == old_name {
         return Ok(serde_json::json!({ "ok": true, "name": new_name }));
     }
@@ -416,15 +388,14 @@ async fn rename_account(
     Ok(serde_json::json!({ "ok": true, "name": new_name }))
 }
 
-#[tauri::command]
-async fn remove_account(
+async fn remove_account_impl(
     name: String,
     delete_profile: Option<bool>,
     ctx: State<'_, AppCtx>,
 ) -> Result<serde_json::Value, String> {
     let _mutation = ctx.account_service.lock().await;
     let name = name.trim().to_string();
-    validate_account_name(&name)?;
+    account_commands::validate_name(&name)?;
 
     if delete_profile.unwrap_or(true) {
         let profile_dir = ctx.account_service.account_dir(&name);
@@ -452,8 +423,7 @@ async fn remove_account(
     Ok(serde_json::json!({ "ok": true }))
 }
 
-#[tauri::command]
-async fn remove_all_accounts(delete_profiles: Option<bool>, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+async fn remove_all_accounts_impl(delete_profiles: Option<bool>, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
     let _mutation = ctx.account_service.lock().await;
     let names = ctx.account_service.load_names();
     if delete_profiles.unwrap_or(true) {
@@ -482,9 +452,8 @@ async fn remove_all_accounts(delete_profiles: Option<bool>, ctx: State<'_, AppCt
     Ok(serde_json::json!({ "ok": true, "removed": names.len() }))
 }
 
-#[tauri::command]
-async fn open_browser(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
-    validate_account_name(&name)?;
+async fn open_browser_impl(name: String, ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    account_commands::validate_name(&name)?;
     let port = launch_session(&ctx, &name).await?;
     register_live_session(&name, port).await;
     // attach the wa tab so the status probe can observe auth state
@@ -1291,6 +1260,7 @@ fn get_config(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
         "human_mode_preset": cfg.human_mode_preset,
         "api_enabled": cfg.api_enabled,
         "api_port": cfg.api_port,
+        "api_token": cfg.api_token,
         "active_profile": AppConfig::active_profile(),
     }))
 }
@@ -1409,6 +1379,37 @@ fn create_desktop_profile_shortcut(_profile_name: &str, _exe_path: &std::path::P
     Ok(())
 }
 
+#[tauri::command]
+async fn get_health_diagnostics(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
+    let cfg = ctx.cfg.lock().unwrap().clone();
+    let names = ctx.account_service.load_names();
+    let sessions = server::sessions_registry();
+    let live = sessions.lock().await;
+    let registry = registry::prune(&AppConfig::classic_root()).unwrap_or_default();
+    Ok(serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "profile": AppConfig::active_profile(),
+        "storage_path": AppConfig::app_dir(),
+        "storage_exists": AppConfig::app_dir().exists(),
+        "chrome": {
+            "path": cfg.chrome_path,
+            "configured": !cfg.chrome_path.is_empty(),
+            "exists": !cfg.chrome_path.is_empty() && std::path::Path::new(&cfg.chrome_path).exists(),
+            "version": cfg.chrome_version,
+        },
+        "api": {
+            "enabled": cfg.api_enabled,
+            "port": cfg.api_port,
+            "authenticated": !cfg.api_token.is_empty(),
+        },
+        "accounts": {
+            "saved": names.len(),
+            "live_sessions": live.len(),
+        },
+        "profile_processes": registry.len(),
+    }))
+}
+
 #[cfg(windows)]
 fn remove_desktop_profile_shortcut(profile_name: &str) {
     if let Some(desktop_dir) = dirs::desktop_dir() {
@@ -1446,7 +1447,14 @@ fn open_profile_window(profile: String, create_shortcut: Option<bool>) -> Result
         cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     }
     cmd.spawn()
-        .map_err(|e| format!("failed to spawn profile window: {e}"))?;
+        .map_err(|e| format!("failed to spawn profile window: {e}"))
+        .and_then(|child| {
+            registry::register(
+                &AppConfig::classic_root(),
+                registry::ProfileProcess { name: safe.clone(), pid: child.id() },
+            )
+            .map_err(|e| format!("recording profile process: {e}"))
+        })?;
     log::info!("spawned profile window: {safe}");
     Ok(())
 }
@@ -1455,6 +1463,7 @@ fn open_profile_window(profile: String, create_shortcut: Option<bool>) -> Result
 #[tauri::command]
 fn list_profiles() -> Vec<String> {
     let dir = AppConfig::classic_root().join("profiles");
+    let _ = registry::prune(&AppConfig::classic_root());
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .map(|rd| {
             rd.flatten()
@@ -1493,6 +1502,10 @@ fn main() {
             std::process::exit(2);
         }
         log::info!("launcher profile active: {}", AppConfig::active_profile().unwrap_or("?"));
+        let _ = registry::register(
+            &AppConfig::classic_root(),
+            registry::ProfileProcess { name: AppConfig::active_profile().unwrap_or(name).to_string(), pid: std::process::id() },
+        );
     }
 
     let cfg = AppConfig::load_or_default();
@@ -1514,6 +1527,7 @@ fn main() {
         stop_flag: Arc::new(tokio::sync::Mutex::new(
             tokio_util::sync::CancellationToken::new(),
         )),
+        api_token: Arc::new(cfg.api_token.clone()),
     };
 
     let pipeline = Pipeline::new(state.clone(), cfg.chrome_path.clone(), paths.accounts.clone());
@@ -1566,6 +1580,7 @@ fn main() {
         account_service,
     };
 
+    let active_profile = AppConfig::active_profile().map(str::to_string);
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -1580,7 +1595,12 @@ fn main() {
         })
         .manage(ctx)
         .invoke_handler(tauri::generate_handler![
-            list_accounts, add_account, remove_account, remove_all_accounts, rename_account, open_browser,
+            account_commands::list_accounts,
+            account_commands::add_account,
+            account_commands::remove_account,
+            account_commands::remove_all_accounts,
+            account_commands::rename_account,
+            account_commands::open_browser,
             start_campaign, pause_campaign, resume_campaign, stop_campaign, get_status,
             get_contacts, clear_contacts, import_contacts,
             list_groups, grab_participants, export_groups, export_groups_xlsx, check_numbers_cmd,
@@ -1590,12 +1610,17 @@ fn main() {
             list_templates, search_templates, save_template, delete_template,
             get_logs, export_log,
             list_sent_campaigns,
+            get_health_diagnostics,
             get_config, save_config, preview_spintax,
             get_wpp_version, check_wpp_update, update_wpp,
             open_profile_window, list_profiles,
         ])
         .run(tauri::generate_context!())
         .expect("error while running blastwa");
+
+    if let Some(name) = active_profile {
+        let _ = registry::unregister(&AppConfig::classic_root(), &name, std::process::id());
+    }
 }
 
 #[cfg(test)]

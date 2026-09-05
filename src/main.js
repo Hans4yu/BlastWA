@@ -43,6 +43,44 @@ export const invoke = isTauri
         return { mock: true, mockLabeled: true, cmd, args };
       };
 
+const IPC_COMMANDS = Object.freeze({
+  accounts: 'list_accounts',
+  campaignStatus: 'get_status',
+  addAccount: 'add_account',
+  removeAccount: 'remove_account',
+  removeAllAccounts: 'remove_all_accounts',
+  renameAccount: 'rename_account',
+  openBrowser: 'open_browser',
+});
+
+async function invokeCommand(command, args = {}) {
+  return invoke(IPC_COMMANDS[command] || command, args);
+}
+
+function normalizeAccounts(value) {
+  const list = Array.isArray(value) ? value : value?.accounts;
+  return Array.isArray(list) ? list.filter((account) => account && typeof account === 'object') : [];
+}
+
+function normalizeCampaignStatus(value) {
+  if (!value || typeof value !== 'object' || value.mock) {
+    return { running: false, sent: 0, failed: 0, mock: !!value?.mock };
+  }
+  return {
+    running: value.running === true,
+    sent: Number.isFinite(value.sent) ? value.sent : 0,
+    failed: Number.isFinite(value.failed) ? value.failed : 0,
+  };
+}
+
+async function getAccounts() {
+  return normalizeAccounts(await invokeCommand('accounts'));
+}
+
+async function getCampaignStatus() {
+  return normalizeCampaignStatus(await invokeCommand('campaignStatus'));
+}
+
 // ----- page-scoped listener lifecycle -----
 
 let navEpoch = 0;          // increments on every navigation
@@ -286,8 +324,7 @@ profileModal.addEventListener('click', (ev) => {
 async function refreshStatus() {
   const $ = (id) => document.getElementById(id);
   try {
-    const accounts = await invoke('list_accounts');
-    const list = Array.isArray(accounts) ? accounts : [];
+    const list = await getAccounts();
     const connected = list.find((a) => a.connected);
     const waiting = list.find((a) => a.browser_running && !a.wa_authenticated);
     if (connected) {
@@ -303,8 +340,8 @@ async function refreshStatus() {
       $('sb-conn').textContent = 'Not connected';
       $('sb-account').textContent = 'Account: -';
     }
-    const st = await invoke('get_status');
-    const campaignRunning = st && !st.mock && st.running;
+    const st = await getCampaignStatus();
+    const campaignRunning = st.running;
     $('sb-login').textContent = campaignRunning
       ? 'Sending...'
       : connected
@@ -343,4 +380,15 @@ function esc(s) {
 }
 
 // shared helpers usable by pages
-window.blastwa = { invoke, listen, isTauri, addCleanup, stampName, esc };
+const legacyHelpers = { stampName, esc };
+window.blastwa = { ...legacyHelpers,
+  invoke,
+  invokeCommand,
+  getAccounts,
+  getCampaignStatus,
+  normalizeAccounts,
+  normalizeCampaignStatus,
+  listen,
+  isTauri,
+  addCleanup,
+};

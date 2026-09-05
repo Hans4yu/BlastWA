@@ -146,7 +146,7 @@ pub fn finalize_last_campaign_record(app_dir: &Path, rec: &CampaignRecord) -> Re
     }
     let mut out = lines.join("\n");
     out.push('\n');
-    std::fs::write(&path, out)?;
+    crate::config::settings::atomic_write(&path, out.as_bytes())?;
     Ok(())
 }
 
@@ -176,7 +176,7 @@ pub fn interrupt_stale_running_records(app_dir: &Path) -> Result<()> {
     if changed {
         let mut out = out_lines.join("\n");
         out.push('\n');
-        std::fs::write(&path, out)?;
+        crate::config::settings::atomic_write(&path, out.as_bytes())?;
     }
     Ok(())
 }

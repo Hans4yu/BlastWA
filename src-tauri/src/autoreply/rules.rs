@@ -47,7 +47,7 @@ pub fn save_rules(rules: &[Rule], path: &std::path::Path) -> anyhow::Result<()> 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    Ok(std::fs::write(path, serde_json::to_string_pretty(rules)?)?)
+    Ok(crate::config::settings::atomic_write(path, serde_json::to_string_pretty(rules)?.as_bytes())?)
 }
 
 pub fn load_rules(path: &std::path::Path) -> anyhow::Result<Vec<Rule>> {

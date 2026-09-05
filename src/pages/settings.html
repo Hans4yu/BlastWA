@@ -97,6 +97,16 @@ curl http://127.0.0.1:8765/api/status
 curl -X POST http://127.0.0.1:8765/api/stop</pre>
     </div>
   </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span>Health Diagnostics</span>
+      <button class="btn btn-sm" id="btn-refresh-health" type="button">Refresh</button>
+    </div>
+    <div class="panel-body">
+      <pre class="code-block mono" id="health-diagnostics">Click Refresh to inspect runtime health.</pre>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -113,6 +123,18 @@ curl -X POST http://127.0.0.1:8765/api/stop</pre>
     $('api-enabled').checked = !!cfg.api_enabled;
     $('api-port').value = cfg.api_port ?? 8765;
     $('active-profile').value = cfg.active_profile || '(default, no isolation)';
+
+    const refreshHealth = async () => {
+      const output = $('health-diagnostics');
+      output.textContent = 'Checking...';
+      try {
+        const health = await invoke('get_health_diagnostics');
+        output.textContent = JSON.stringify(health, null, 2);
+      } catch (e) {
+        output.textContent = 'Diagnostics failed: ' + (e && e.message ? e.message : e);
+      }
+    };
+    $('btn-refresh-health').onclick = refreshHealth;
 
     const wpp = await invoke('get_wpp_version');
     $('wpp-version').value = wpp.version || wpp.local || 'bundled';

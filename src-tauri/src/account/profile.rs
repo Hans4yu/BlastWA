@@ -29,7 +29,7 @@ impl CampaignProfile {
         let dir = Self::dir(profiles_dir, &self.name);
         std::fs::create_dir_all(&dir)?;
         let path = dir.join("profile.json");
-        std::fs::write(&path, serde_json::to_string_pretty(self)?)?;
+        crate::config::settings::atomic_write(&path, serde_json::to_string_pretty(self)?.as_bytes())?;
         Ok(path)
     }
 

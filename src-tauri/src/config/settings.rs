@@ -5,6 +5,70 @@ use std::sync::OnceLock;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+pub const STORAGE_SCHEMA_VERSION: u32 = 1;
+
+pub struct FileLock {
+    path: PathBuf,
+}
+
+impl FileLock {
+    pub fn acquire(target: &Path) -> std::io::Result<Self> {
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let path = target.with_extension("lock");
+        for _ in 0..40 {
+            match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(_) => return Ok(Self { path }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "storage lock timeout"))
+    }
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+pub fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temp = path.with_extension(format!(
+        "{}.tmp",
+        path.extension().and_then(|ext| ext.to_str()).unwrap_or("data")
+    ));
+    {
+        use std::io::Write;
+        let mut file = fs::File::create(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+    if path.exists() {
+        fs::remove_file(path)?;
+    }
+    fs::rename(temp, path)
+}
+
+pub fn backup_corrupt_file(path: &Path) {
+    if !path.exists() {
+        return;
+    }
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let backup = path.with_file_name(format!(
+        "{}.corrupt-{}",
+        path.file_name().and_then(|n| n.to_str()).unwrap_or("data"),
+        stamp
+    ));
+    let _ = fs::copy(path, backup);
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
@@ -18,6 +82,8 @@ pub struct AppConfig {
     pub api_enabled: bool,
     #[serde(default = "default_api_port")]
     pub api_port: u16,
+    #[serde(default = "default_api_token")]
+    pub api_token: String,
     #[serde(default)]
     pub wpp_last_check_at: Option<String>,
 }
@@ -28,6 +94,10 @@ fn default_api_enabled() -> bool {
 
 fn default_api_port() -> u16 {
     8765
+}
+
+fn default_api_token() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 impl Default for AppConfig {
@@ -41,6 +111,7 @@ impl Default for AppConfig {
             human_mode_preset: "natural".into(),
             api_enabled: false,
             api_port: 8765,
+            api_token: default_api_token(),
             wpp_last_check_at: None,
         }
     }
@@ -200,7 +271,13 @@ impl AppConfig {
             return Ok(Self::default());
         }
         let raw = fs::read_to_string(&path).context("reading config.json")?;
-        serde_json::from_str(&raw).context("parsing config.json")
+        match serde_json::from_str(&raw) {
+            Ok(config) => Ok(config),
+            Err(error) => {
+                backup_corrupt_file(path);
+                Err(error).context("parsing config.json")
+            }
+        }
     }
 
     pub fn save(&self) -> Result<()> {
@@ -208,7 +285,7 @@ impl AppConfig {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&path, serde_json::to_string_pretty(self)?)?;
+        atomic_write(&path, serde_json::to_string_pretty(self)?.as_bytes())?;
         Ok(())
     }
 
@@ -235,6 +312,17 @@ mod tests {
         let back: AppConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(back.api_port, 8765);
         assert_eq!(back.default_delay_min, 5);
+    }
+
+    #[test]
+    fn atomic_write_replaces_file_without_temp_artifact() {
+        let dir = std::env::temp_dir().join(format!("blastwa_atomic_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let path = dir.join("nested").join("value.json");
+        atomic_write(&path, br#"{"ok":true}"#).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), r#"{"ok":true}"#);
+        assert!(!path.with_extension("json.tmp").exists());
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

@@ -41,9 +41,9 @@ impl TemplateLibrary {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        Ok(std::fs::write(
+        Ok(crate::config::settings::atomic_write(
             &self.path,
-            serde_json::to_string_pretty(templates)?,
+            serde_json::to_string_pretty(templates)?.as_bytes(),
         )?)
     }
 

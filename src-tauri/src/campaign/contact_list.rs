@@ -75,7 +75,7 @@ impl ContactList {
     }
 
     pub fn save_json(&self, path: &Path) -> Result<()> {
-        Ok(std::fs::write(path, serde_json::to_string_pretty(self)?)?)
+        Ok(crate::config::settings::atomic_write(path, serde_json::to_string_pretty(self)?.as_bytes())?)
     }
 
     pub fn load_json(path: &Path) -> Result<Self> {

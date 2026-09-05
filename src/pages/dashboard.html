@@ -92,8 +92,7 @@
   async function renderAccounts() {
     const $ = (id) => document.getElementById(id);
     try {
-      const res = await window.blastwa.invoke('list_accounts');
-      const accounts = Array.isArray(res) ? res : (res.accounts || []);
+      const accounts = await window.blastwa.getAccounts();
 
       const snap = accountsSnapshot(accounts);
       const renaming = document.querySelector('#accounts-body [data-renaming]');
@@ -160,7 +159,7 @@
     updateSelectionState();
     try {
       for (var i = 0; i < names.length; i += 1) {
-        await window.blastwa.invoke('remove_account', { name: names[i], deleteProfile: true });
+        await window.blastwa.invokeCommand('removeAccount', { name: names[i], deleteProfile: true });
       }
       await renderAccounts();
     } catch (e) {
@@ -226,13 +225,12 @@
       return;
     }
     try {
-      var accounts = await window.blastwa.invoke('list_accounts');
-      var existing = Array.isArray(accounts) ? accounts : (accounts.accounts || []);
+      var existing = await window.blastwa.getAccounts();
       if (existing.some(function (a) { return a.name === name; })) {
         showAddError('An account named ' + name + ' already exists.');
         return;
       }
-      const res = await window.blastwa.invoke('add_account', { name: name });
+      const res = await window.blastwa.invokeCommand('addAccount', { name: name });
       closeAddModal();
       // account is saved either way; surface session warnings honestly
       if (res && res.warning) alert(res.warning);
@@ -260,7 +258,7 @@
       removeBusy = true;
       updateSelectionState();
       try {
-        await window.blastwa.invoke('remove_all_accounts', { deleteProfiles: true });
+        await window.blastwa.invokeCommand('removeAllAccounts', { deleteProfiles: true });
         await renderAccounts();
       } catch (e) {
         alert('Failed to remove accounts: ' + formatError(e));
@@ -326,7 +324,7 @@
       const newName = input.value.trim();
       if (!newName || newName === oldName) { finish(); return; }
       try {
-        await window.blastwa.invoke('rename_account', { oldName, newName });
+        await window.blastwa.invokeCommand('renameAccount', { oldName, newName });
         done = true;
         await renderAccounts();
       } catch (e) {
@@ -346,7 +344,7 @@
 
   window.openAccountBrowser = async function (name) {
     try {
-      await window.blastwa.invoke('open_browser', { name });
+      await window.blastwa.invokeCommand('openBrowser', { name });
     } catch (e) {
       alert('Failed to open browser session: ' + formatError(e));
     }
