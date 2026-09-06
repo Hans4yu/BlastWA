@@ -91,6 +91,7 @@ node scripts/verify_router_lifecycle.js
 node scripts/check_checker_cache.js
 node scripts/check_groups_cache.js
 node scripts/check_sending_page.js
+node scripts/check_autoreply_page.js
 
 # Build release standalone GUI installer
 cargo build --package blastwa-setup --release

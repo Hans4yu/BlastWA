@@ -14,7 +14,8 @@ const REQUIRED = {
   sending: ['init_sending'],
   contacts: ['init_contacts', 'handleImport', 'clearAll'],
   groups: ['init_groups'],
-  autoreply: ['init_autoreply', 'addRuleRow', 'syncEmpty'],
+  // autoreply binds all buttons via addEventListener (no inline onclick)
+  autoreply: ['init_autoreply'],
   templates: ['init_templates', 'openNewTpl', 'closeEditor', 'saveTpl'],
   log: ['init_log', 'exportLog'],
   settings: ['init_settings', 'saveSettings'],

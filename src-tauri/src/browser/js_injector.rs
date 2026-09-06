@@ -577,6 +577,91 @@ impl JsInjector {
         )
         .await
     }
+
+    // ---------- auto-reply inbox ----------
+
+    /// arm (once per page) the WPP `chat.new_message` listener that buffers
+    /// incoming 1:1 text messages into `window.__bw_inbox` for the watcher
+    /// to drain. event name + payload verified against the wa-js docs
+    /// (ChatEventTypes: 'chat.new_message' -> MsgModel).
+    pub async fn install_inbox_listener(&self) -> Result<()> {
+        let v = self
+            .eval_json(
+                r#"(function(){
+                    try {
+                        if (!window.WPP || !window.WPP.isReady) return { installed: false, reason: 'wpp not ready' };
+                        if (window.__bw_inbox_on) return { installed: true };
+                        window.__bw_inbox = [];
+                        WPP.on('chat.new_message', function(m){
+                            try {
+                                if (!m) return;
+                                var id = (m.id && (m.id._serialized || m.id.id)) ? String(m.id._serialized || m.id.id) : String(m.id || '');
+                                var fromSer = (m.from && (m.from._serialized || m.from.user)) ? String(m.from._serialized || m.from.user) : '';
+                                var selfMode = String(m.self || '');
+                                // 'in' = incoming; anything else ('out', missing) is ours
+                                var fromMe = (selfMode && selfMode !== 'in') || !!(m.id && m.id.fromMe) || !!m.fromMe;
+                                var isGroup = /@g\.us$/i.test(fromSer) || !!m.isGroupMsg;
+                                var isBroadcast = /@broadcast$/i.test(fromSer) || fromSer.indexOf('status@') === 0;
+                                var body = (typeof m.body === 'string') ? m.body : '';
+                                if (fromMe || isGroup || isBroadcast) return;
+                                if (!fromSer || !body.trim()) return;
+                                window.__bw_inbox.push({
+                                    id: id,
+                                    from: fromSer,
+                                    body: body,
+                                    name: String(m.notifyName || '')
+                                });
+                                if (window.__bw_inbox.length > 200) {
+                                    window.__bw_inbox.splice(0, window.__bw_inbox.length - 200);
+                                }
+                            } catch (e) {}
+                        });
+                        window.__bw_inbox_on = true;
+                        return { installed: true };
+                    } catch (e) { return { installed: false, reason: String(e) }; }
+                })()"#,
+            )
+            .await?;
+        if v.get("installed").and_then(|x| x.as_bool()) != Some(true) {
+            anyhow::bail!(
+                "inbox listener not installed: {}",
+                v.get("reason").and_then(|x| x.as_str()).unwrap_or("unknown")
+            );
+        }
+        Ok(())
+    }
+
+    /// take everything the listener buffered since the last poll
+    pub async fn drain_inbox(&self) -> Result<Vec<InboxMessage>> {
+        let v = self
+            .eval_json(
+                r#"(function(){
+                    try {
+                        if (!window.__bw_inbox || !window.__bw_inbox.length) return [];
+                        return window.__bw_inbox.splice(0, window.__bw_inbox.length);
+                    } catch (e) { return []; }
+                })()"#,
+            )
+            .await?;
+        let items = v.as_array().cloned().unwrap_or_default();
+        Ok(items
+            .into_iter()
+            .filter_map(|m| serde_json::from_value(m).ok())
+            .collect())
+    }
+}
+
+/// one buffered incoming message handed from the page to the watcher
+#[derive(Debug, Clone, Deserialize)]
+pub struct InboxMessage {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub from: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub name: String,
 }
 
 // NumberStatus lives at module level (see below) — keep the impl near RawCheck

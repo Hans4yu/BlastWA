@@ -17,7 +17,17 @@
   <div class="panel-body">
     <div class="field"><label>Name</label><input type="text" id="tpl-name" /></div>
     <div class="field"><label>Tags (comma separated)</label><input type="text" id="tpl-tags" placeholder="promo,sales" /></div>
-    <div class="field"><label>Body (supports spintax &amp; variables</label><textarea id="tpl-body"></textarea></div>
+    <div class="field" id="tpl-attachment-row" style="display:none">
+      <label>Attachment</label>
+      <span id="tpl-attachment-name" style="font-size:12px;color:var(--text-dim)"></span>
+    </div>
+    <div class="field"><label>Body (supports spintax &amp; variables)</label><textarea id="tpl-body"></textarea>
+      <div class="row" style="margin-top:6px;margin-bottom:0">
+        <button class="btn btn-secondary" id="btn-tpl-preview">Preview 3 samples</button>
+      </div>
+      <div id="tpl-preview" style="display:none;margin-top:8px;padding:8px 10px;border:1px solid var(--border);
+        border-radius:6px;font-size:12px;white-space:pre-wrap;color:var(--text-dim)"></div>
+    </div>
     <div class="row" style="margin-bottom:0">
       <button class="btn" onclick="saveTpl()">Save</button>
       <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
@@ -53,10 +63,39 @@
   // scripts re-execute per navigation and a top-level lexical binding would
   // throw 'already declared' on the second visit to this tab
   var editingId = null;
+  // kept across an edit so saving doesn't silently drop a stored attachment
+  // (save_template replaces the whole record, so an absent field = cleared)
+  var editingAttachment = null;
 
   window.init_templates = async function () {
     const { invoke } = window.blastwa;
     document.getElementById('tpl-search').addEventListener('input', refresh);
+
+    // live spintax + variable preview against the first contacts, same
+    // engine the campaign send actually uses
+    document.getElementById('btn-tpl-preview').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-tpl-preview');
+      const box = document.getElementById('tpl-preview');
+      const text = document.getElementById('tpl-body').value;
+      if (!text.trim()) {
+        box.style.display = '';
+        box.textContent = 'Nothing to preview — write a body first.';
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const samples = await invoke('preview_spintax', { text });
+        box.style.display = '';
+        box.innerHTML = (Array.isArray(samples) ? samples : [])
+          .map((s) => esc(s)).join('\n') || '(no output)';
+      } catch (e) {
+        box.style.display = '';
+        box.textContent = 'Preview failed: ' + (e && e.message ? e.message : e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
     await refresh();
   };
 
@@ -126,19 +165,32 @@
 
   function openNewTpl() {
     editingId = null;
+    editingAttachment = null;
     document.getElementById('tpl-editor-title').textContent = 'New Template';
     document.getElementById('tpl-name').value = '';
     document.getElementById('tpl-tags').value = '';
     document.getElementById('tpl-body').value = '';
+    document.getElementById('tpl-attachment-row').style.display = 'none';
+    document.getElementById('tpl-preview').style.display = 'none';
     document.getElementById('tpl-editor').style.display = '';
   }
 
   function openEditTpl(tpl) {
     editingId = tpl.id;
+    editingAttachment = tpl.attachment_path || null;
     document.getElementById('tpl-editor-title').textContent = 'Edit Template';
     document.getElementById('tpl-name').value = tpl.name || '';
     document.getElementById('tpl-tags').value = (tpl.tags || []).join(', ');
     document.getElementById('tpl-body').value = tpl.body || '';
+    const attRow = document.getElementById('tpl-attachment-row');
+    if (editingAttachment) {
+      document.getElementById('tpl-attachment-name').textContent =
+        'file attached (kept on save): ' + editingAttachment.split(/[\\/]/).pop();
+      attRow.style.display = '';
+    } else {
+      attRow.style.display = 'none';
+    }
+    document.getElementById('tpl-preview').style.display = 'none';
     document.getElementById('tpl-editor').style.display = '';
   }
 
@@ -158,6 +210,9 @@
       name,
       tags: document.getElementById('tpl-tags').value.split(',').map(s => s.trim()).filter(Boolean),
       body: document.getElementById('tpl-body').value,
+      // tauri ipc maps rust snake_case params to camelCase js keys —
+      // attachment_path here would silently arrive as None in rust
+      attachmentPath: editingAttachment,
     };
     try {
       await invoke('save_template', payload);
@@ -166,6 +221,7 @@
       return;
     }
     editingId = null;
+    editingAttachment = null;
     closeEditor();
     await refresh();
   }

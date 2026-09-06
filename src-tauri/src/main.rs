@@ -121,6 +121,15 @@ fn main() {
         pipeline_for_api.serve(rx).await;
     });
 
+    // auto-reply watcher: answers incoming messages on live sessions using
+    // the saved rules. never launches chrome — only accounts with a running
+    // session are watched.
+    let paths_for_watcher = paths.clone();
+    let pipeline_for_watcher = pipeline.clone();
+    tauri::async_runtime::spawn(async move {
+        blastwa_core::autoreply::watcher::run(pipeline_for_watcher, paths_for_watcher.data).await;
+    });
+
     let templates = TemplateLibrary::new(&paths.templates);
 
     let account_service = AccountService::new(AppConfig::app_dir(), paths.accounts.clone());
@@ -180,6 +189,7 @@ fn main() {
             commands::groups::export_groups_xlsx,
             commands::autoreply::load_rules,
             commands::autoreply::save_rules,
+            commands::autoreply::autoreply_status,
             commands::templates::list_templates,
             commands::templates::search_templates,
             commands::templates::save_template,

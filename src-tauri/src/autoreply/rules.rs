@@ -10,12 +10,16 @@ pub enum MatchType {
 }
 
 impl MatchType {
+    /// case-insensitive: senders type "PROMO", "Promo", "promo" freely, and a
+    /// keyword that only fires on one casing silently drops the rest
     pub fn matches(&self, message: &str, keyword: &str) -> bool {
+        let msg = message.to_lowercase();
+        let kw = keyword.to_lowercase();
         match self {
-            MatchType::Like => message == keyword,
-            MatchType::StartWith => message.starts_with(keyword),
-            MatchType::EndWith => message.ends_with(keyword),
-            MatchType::Contains => message.contains(keyword),
+            MatchType::Like => msg == kw,
+            MatchType::StartWith => msg.starts_with(&kw),
+            MatchType::EndWith => msg.ends_with(&kw),
+            MatchType::Contains => msg.contains(&kw),
         }
     }
 }
@@ -38,16 +42,43 @@ fn default_true() -> bool {
     true
 }
 
-/// first matching enabled rule wins — mirrors original behavior
-pub fn match_rule<'a>(message: &str, rules: &'a [Rule]) -> Option<&'a Rule> {
-    rules.iter().find(|r| r.enabled && r.match_type.matches(message, &r.keyword))
+/// rule usable by the watcher: enabled, with a keyword AND a reply to send.
+/// an empty keyword is catastrophic — `"".contains("")` is true, so the rule
+/// would answer EVERY incoming message.
+impl Rule {
+    pub fn is_armed(&self) -> bool {
+        self.enabled
+            && !self.keyword.trim().is_empty()
+            && !self.reply_message.as_deref().unwrap_or("").trim().is_empty()
+    }
 }
 
-pub fn save_rules(rules: &[Rule], path: &std::path::Path) -> anyhow::Result<()> {
+/// first matching enabled rule wins — mirrors original behavior.
+/// the empty-keyword guard lives here (not just in save) because a legacy
+/// file could still hand us one; a reply is NOT required to match — the
+/// watcher skips reply-less rules at send time.
+pub fn match_rule<'a>(message: &str, rules: &'a [Rule]) -> Option<&'a Rule> {
+    rules.iter().find(|r| {
+        r.enabled
+            && !r.keyword.trim().is_empty()
+            && r.match_type.matches(message, &r.keyword)
+    })
+}
+
+/// persist rules, dropping half-written rows (no keyword or no reply text).
+/// the watcher must never load a rule that would reply with an empty
+/// message or match everything. returns the number of rules actually saved
+/// so the UI can surface how many rows were skipped.
+pub fn save_rules(rules: &[Rule], path: &std::path::Path) -> anyhow::Result<usize> {
+    let armed: Vec<&Rule> = rules.iter().filter(|r| r.is_armed()).collect();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    Ok(crate::config::settings::atomic_write(path, serde_json::to_string_pretty(rules)?.as_bytes())?)
+    crate::config::settings::atomic_write(
+        path,
+        serde_json::to_string_pretty(&armed)?.as_bytes(),
+    )?;
+    Ok(armed.len())
 }
 
 pub fn load_rules(path: &std::path::Path) -> anyhow::Result<Vec<Rule>> {
@@ -113,6 +144,21 @@ mod tests {
     }
 
     #[test]
+    fn keyword_matching_is_case_insensitive() {
+        assert!(match_rule("PROMO pgi bos", &[rule(MatchType::Contains, "promo")]).is_some());
+        assert!(match_rule("halo BOS", &[rule(MatchType::Like, "Halo Bos")]).is_some());
+        assert!(match_rule("MENU utama", &[rule(MatchType::StartWith, "menu")]).is_some());
+        assert!(match_rule("mulai dari MENU", &[rule(MatchType::StartWith, "menu")]).is_none());
+    }
+
+    #[test]
+    fn empty_keyword_never_matches_anything() {
+        // contains("") is true for every message; an empty keyword must be
+        // inert or the rule would auto-reply to the entire inbox
+        assert!(match_rule("anything", &[rule(MatchType::Contains, "")]).is_none());
+    }
+
+    #[test]
     fn start_and_end_anchors() {
         assert!(match_rule("halo bos", &[rule(MatchType::StartWith, "halo")]).is_some());
         assert!(!match_rule("eh halo bos", &[rule(MatchType::StartWith, "halo")]).is_some());
@@ -132,9 +178,24 @@ mod tests {
     #[test]
     fn rules_roundtrip_json() {
         let path = std::env::temp_dir().join("blastwa_test_rules.json");
-        save_rules(&[rule(MatchType::Contains, "x")], &path).unwrap();
+        let saved = save_rules(&[rule(MatchType::Contains, "x")], &path).unwrap();
+        assert_eq!(saved, 1);
         let back = load_rules(&path).unwrap();
         assert_eq!(back.len(), 1);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_drops_rows_without_keyword_or_reply() {
+        let path = std::env::temp_dir().join("blastwa_test_rules_filter.json");
+        let mut no_reply = rule(MatchType::Contains, "hi");
+        no_reply.reply_message = None;
+        let no_keyword = rule(MatchType::Contains, "");
+        let saved = save_rules(&[no_reply, no_keyword, rule(MatchType::Contains, "ok")], &path).unwrap();
+        assert_eq!(saved, 1, "only the fully armed rule may be persisted");
+        let back = load_rules(&path).unwrap();
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].keyword, "ok");
         let _ = std::fs::remove_file(&path);
     }
 }

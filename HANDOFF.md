@@ -1,6 +1,6 @@
 # BlastWA Handoff
 
-**Updated:** 2026-09-06 (second pass)
+**Updated:** 2026-09-06 (third pass — Auto Reply + Templates made real)
 **Branch:** main
 **Base commit:** 4f3bca3 — command modularization fully complete, clippy clean
 
@@ -21,18 +21,30 @@ Complete the command-modularization refactor (Priority 2 of the 2026-09-05 hando
 - **Live test script:** `scripts/full_live_test.js` now reads `TEST_TARGET`, `TEST_PHONE`, `TEST_ASSETS_DIR` env vars (sensible defaults preserved) instead of hardcoding phone numbers and a user-specific path.
 - **Clippy:** component installed; all 10 workspace warnings fixed (unnecessary casts in setup, slice over `&mut Vec` in `jitter_order`, `unwrap_or_default` in settings, char-array split in contact_list, `SessionList` type alias in server.rs, `is_multiple_of` in human_behavior, `#[allow(clippy::too_many_arguments)]` on `run_campaign`). `cargo clippy --workspace --all-targets` is warning-free.
 
-## Verification (2026-09-06, second pass)
+### This pass (2026-09-06): Auto Reply made real + Templates bug fixes
+- **Auto Reply watcher shipped** (`src-tauri/src/autoreply/watcher.rs`, spawned in `main.rs`): the page's "stored but not yet answering" era is over. Every 3s it snapshots the live-sessions registry, attaches to each running account (never launches Chrome), arms a WPP `chat.new_message` listener (event verified against wa-js docs: `ChatEventTypes 'chat.new_message' → MsgModel`), drains the in-page `window.__bw_inbox` buffer, matches against saved rules (first armed rule wins), and replies with seen → typing → 0.7–1.8s pause → send. Incoming only (`self === 'in'`), 1:1 chats only (groups + broadcasts skipped), per-account message-id dedupe (cap 1000), per-account 120s cycle timeout so one dead port never stalls the loop.
+- **Rules lost on tab switch — FIXED**: the SPA rebuilds pages on every navigation, which used to wipe unsaved rows. `autoreply.html` now autosaves (debounced 800ms) on every edit and fires a final save in the router cleanup on navigation away. Verified live: rule edited → tab switch → back → row restored from disk.
+- **Rule engine hardened** (`rules.rs`): keyword matching is now case-insensitive; `Rule::is_armed()` requires keyword AND reply; `save_rules` drops non-armed rows and returns the saved count; `match_rule` refuses empty keywords (empty Contains matches every message = answers the whole inbox). Legacy rule files without `reply_message` still match — the watcher just skips reply-less rules at send time.
+- **New IPC:** `save_rules` returns `{ok, saved, skipped}`; `autoreply_status` exposes watcher telemetry (armed rules, watching accounts, replies sent, last reply epoch) rendered in the page's live status strip (5s refresh).
+- **Templates — edit no longer wipes the attachment**: `save_template` replaces the whole record, and the editor used to send no attachment at all; it now stashes `tpl.attachment_path` on Edit and re-sends it on Save. **Plus the IPC key trap:** the payload key must be `attachmentPath` (camelCase) or Tauri silently deserializes Rust's `attachment_path` param as None — the same class of bug as the old `humanPreset`/`humanModePreset` mismatch.
+- **Templates editor got a live preview** ("Preview 3 samples" → `preview_spintax` with real contact variables) and the editor shows the kept attachment while editing.
+- **New regression harness:** `scripts/check_autoreply_page.js` (mini-DOM vm harness) pins autosave-on-edit, save-on-navigation-cleanup, incomplete-row skipping, PascalCase match-type wire format, restore-without-dirty, delete-persists, and the status strip rendering. `verify_router_lifecycle.js` REQUIRED list updated: autoreply now binds all buttons via addEventListener, so only `init_autoreply` is an inline-handler global.
+
+## Verification (2026-09-06, third pass)
 
 ```
-cargo check -p blastwa --features gui --all-targets   # 0 errors, 0 warnings
-cargo clippy --workspace --all-targets                # 0 warnings
-cargo test --workspace                                # 70 lib + 3 integration passed
-cargo test -p blastwa --features gui                  # 70 lib + 3 integration + 3 bin passed
-cargo build --package blastwa-setup --release         # passed
+cargo test --lib                                      # 73 passed (incl. new autoreply tests)
+cargo test --workspace                                # 73 lib + 3 integration passed
+cargo test -p blastwa --features gui --bin blastwa    # 3 bin passed
+cargo build --release -p blastwa --features gui       # passed, deployed to %LOCALAPPDATA%\Programs\BlastWA
 node scripts/verify_router_lifecycle.js               # PASSED
 node scripts/check_checker_cache.js                   # PASSED
 node scripts/check_groups_cache.js                    # PASSED
 node scripts/check_sending_page.js                    # PASSED
+node scripts/check_autoreply_page.js                  # PASSED (new)
+live CDP probe (temp script)                          # 11/11 PASSED: autosave, tab-switch
+                                                      # survival, status telemetry, template
+                                                      # attachment persistence, spintax preview
 ```
 
 ## Remaining Tasks
@@ -53,12 +65,12 @@ node scripts/check_sending_page.js                    # PASSED
 
 ## Exact Next Move
 
-**Uninstall wizard shipped (2026-09-06, commit f0d396e).** The uninstall flow is now a full wizard in the same native shell as the installer: Welcome → Options → progress → Done. Options carries "Also delete account data (WhatsApp sessions, profiles)", **unchecked by default** (kept unless ticked — reinstall then needs no QR re-scan). Removal steps run on a worker thread with live step text; closing mid-uninstall still triggers the self-cleanup sweeper. Verified live: both checkbox paths, sweeper self-cleanup, window-close guarantee.
+**Auto Reply + Templates shipped (2026-09-06, this pass).** Auto Reply now answers: the watcher (`autoreply::watcher::run`, spawned at app start) watches every account with a running Chrome session, buffers incoming 1:1 texts via WPP `chat.new_message`, and fires the first matching armed rule (case-insensitive) with a humanized seen→typing→pause→send sequence. Rules autosave on every edit and on tab switch — the "switched tab and my rules vanished" bug is dead. Templates: editing no longer silently deletes a stored attachment (and remember the Tauri IPC rule: JS payloads send camelCase, Rust params are snake_case). The still-true "not verified against a live session" list: QR scan → watcher attaches → real incoming message → real auto-reply. To test: arm a rule (e.g. Contains "test" → "hi"), open an account, message it from another phone.
 
-**No more surprise UAC:** rustc's default embedded manifest is an empty `<assembly>`, so Windows installer detection auto-elevated every exe named `*setup*`/`*install*`/`*uninstall*`. `setup/app.manifest` (embedded verbatim via `/MANIFESTINPUT`, `requestedExecutionLevel=asInvoker`) defeats the heuristic — verified: an uninstall.exe-named binary now launches non-elevated. Note: `/MANIFESTUAC:"..."` inline quoting produced a broken side-by-side manifest; always use the manifest-file approach.
+Everything else from previous passes (installer/uninstall wizard, no-UAC manifest, accounts fixes, checker UI, selection) unchanged — details below and in git log.
 
-Deployed artifacts: `target/release/setup.exe` (installer + uninstall wizard) — the machine is currently fully de-installed; install with `D:\Tes\blastwa\target\release\setup.exe`.
+Deployed artifacts: `target/release/blastwa.exe` → `%LOCALAPPDATA%\Programs\BlastWA\blastwa.exe` (currently installed and running). `target/release/setup.exe` remains the installer/uninstaller.
 
 Two elevated stray windows from pre-fix testing (uninstall-helper / old uninstall.exe) may still sit on the desktop — close them via their Cancel button (elevated processes cannot be killed from a non-admin shell).
 
-Still needs a live phone: QR scan → Online badge transition, real message send, autoreply against a live session.
+Still needs a live phone: QR scan → Online badge transition, real message send, **auto-reply firing against a live session**.
