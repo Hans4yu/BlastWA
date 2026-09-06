@@ -65,7 +65,11 @@ pub(crate) fn import_contacts(
                 .map_err(|e| e.to_string())?
                 .1
         }
-        other => return Err(format!("unsupported format: {other}")),
+        other => {
+            return Err(format!(
+                "\"{path}\" is not a contact file — import accepts .txt, .csv, .xlsx or .xls"
+            ))
+        }
     };
     if remove_dupes.unwrap_or(true) {
         list.filter_duplicates();

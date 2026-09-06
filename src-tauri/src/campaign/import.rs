@@ -94,7 +94,11 @@ pub fn read_table(path: &Path) -> Result<(Vec<String>, Vec<Vec<String>>)> {
     match ext.as_str() {
         "csv" | "txt" => read_csv(path),
         "xlsx" | "xls" => read_xlsx(path),
-        other => Err(anyhow::anyhow!("unsupported format: {other}")),
+        // name the fix in the message: a bare "unsupported format: png"
+        // sent users hunting through menus for a format list
+        other => Err(anyhow::anyhow!(
+            "\".{other}\" is not a contact file — import accepts .txt, .csv, .xlsx or .xls"
+        )),
     }
 }
 

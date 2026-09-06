@@ -591,8 +591,19 @@
     }
   });
 
+  // the os file dialog's filter is a hint, not a contract — windows still
+  // returns whatever is typed into the filename box, so validate here at
+  // the single choke point every import path goes through. (inlined list:
+  // a top-level const would throw 'already declared' on the second
+  // navigation of this re-executed page script)
   async function importFromPath(path, removeDupes) {
     const { invoke } = window.blastwa;
+    const ext = (path.split('.').pop() || '').toLowerCase();
+    if (!['txt', 'csv', 'xlsx', 'xls'].includes(ext)) {
+      alert(`"${path.split(/[\\/]/).pop()}" is not a contact file.` +
+        `\nPick a .txt, .csv or .xlsx file — one contact per line: number|fullname|var1|var2|...`);
+      return;
+    }
     try {
       const res = await invoke('import_contacts', { path, removeDupes });
       if (res && res.mock) {
