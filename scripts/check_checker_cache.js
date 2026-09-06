@@ -51,7 +51,7 @@ function makeEl(id) {
     removeEventListener() {},
     querySelectorAll(sel) {
       if (sel === 'tr') {
-        const n = (this.innerHTML.match(/<tr>/g) || []).length;
+        const n = (this.innerHTML.match(/<tr[\s>]/g) || []).length;
         return Array.from({ length: n }, () => makeEl('tr'));
       }
       return [];
@@ -139,13 +139,13 @@ const NO = { number: '6289541071050', exists: false, kind: 'Not Found' };
   a.$('btn-run-check')._h.click();
   await new Promise((r) => setTimeout(r, 30));
   assert('s1 check ran and rendered both rows',
-    (a.$('check-body').innerHTML.match(/<tr>/g) || []).length === 2);
+    (a.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 2);
   assert('s1 export enabled when a valid row exists',
     a.$('btn-export-valid').disabled === false);
 
   const b = await navigate({ checkResult: [YES, NO] });
   assert('s1 restored rows after navigating back',
-    (b.$('check-body').innerHTML.match(/<tr>/g) || []).length === 2);
+    (b.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 2);
   assert('s1 restore did NOT re-invoke the checker',
     !b.invokes.includes('check_numbers_cmd'));
   assert('s1 restore note names the cache age',
@@ -162,7 +162,7 @@ const NO = { number: '6289541071050', exists: false, kind: 'Not Found' };
   assert('s2 explicit Run Check re-invoked the checker',
     c.invokes.filter((i) => i === 'check_numbers_cmd').length === 1);
   assert('s2 rows replaced by the fresh result',
-    (c.$('check-body').innerHTML.match(/<tr>/g) || []).length === 1);
+    (c.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 1);
 
   // --- s3: a failed re-check keeps the previous rows visible ---
   const d = await navigate({ checkThrows: true });
@@ -170,7 +170,7 @@ const NO = { number: '6289541071050', exists: false, kind: 'Not Found' };
   d.$('btn-run-check')._h.click();
   await new Promise((r) => setTimeout(r, 40));
   assert('s3 previous rows still on screen after a failed check',
-    (d.$('check-body').innerHTML.match(/<tr>/g) || []).length === 1);
+    (d.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 1);
   assert('s3 no dead-end empty state while cached rows are shown',
     d.$('check-empty').style.display === 'none');
   assert('s3 cache untouched by the failure',
@@ -189,7 +189,7 @@ const NO = { number: '6289541071050', exists: false, kind: 'Not Found' };
 
   const f = await navigate({});
   assert('s4 nothing restored from a cleared cache',
-    (f.$("check-body").innerHTML.match(/<tr>/g) || []).length === 0);
+    (f.$("check-body").innerHTML.match(/<tr[\s>]/g) || []).length === 0);
 
   // --- s5: an all-invalid result leaves both action buttons disabled ---
   const g = await navigate({ checkResult: [NO] });
@@ -200,7 +200,7 @@ const NO = { number: '6289541071050', exists: false, kind: 'Not Found' };
   assert('s5 export disabled when nothing is valid',
     g.$('btn-export-valid').disabled === true);
   assert('s5 invalid rows are still cached and rendered',
-    (g.$('check-body').innerHTML.match(/<tr>/g) || []).length === 1);
+    (g.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 1);
 
   console.log('');
   console.log(failures ? `${failures} FAILURES` : 'ALL CHECKER CACHE CHECKS PASSED');

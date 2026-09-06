@@ -274,15 +274,33 @@
       document.getElementById('btn-export-valid').disabled = !validNumbers.length;
     }
 
-    function renderCheckRows(outcomes) {
-      const body = document.getElementById('check-body');
-      body.innerHTML = outcomes.map((o, i) => `
-        <tr>
+    function checkRowHtml(o, i) {
+      // compact dot status + row tint: a column of chunky badges was hard
+      // to scan; the tint carries the verdict, the dot carries the label
+      const state = o.exists ? 'valid' : 'invalid';
+      return `
+        <tr class="check-${state}">
           <td>${i + 1}</td>
           <td class="mono">${esc(o.number)}</td>
-          <td><span class="badge ${o.exists ? 'badge-green' : 'badge-red'}">${o.exists ? 'yes' : 'no'}</span></td>
+          <td><span class="wa-${o.exists ? 'yes' : 'no'}">${o.exists ? 'yes' : 'no'}</span></td>
           <td>${esc(o.kind || '')}</td>
-        </tr>`).join('');
+        </tr>`;
+    }
+
+    function updateCheckSummary(outcomes) {
+      const el = document.getElementById('check-summary');
+      if (!el || !outcomes.length) return;
+      const yes = outcomes.filter((o) => o.exists).length;
+      el.innerHTML =
+        `<span class="wa-yes"><b>${yes}</b> on WhatsApp</span> · ` +
+        `<span class="wa-no"><b>${outcomes.length - yes}</b> not found</span>` +
+        ` · ${outcomes.length} checked`;
+    }
+
+    function renderCheckRows(outcomes) {
+      const body = document.getElementById('check-body');
+      body.innerHTML = outcomes.map((o, i) => checkRowHtml(o, i)).join('');
+      updateCheckSummary(outcomes);
       document.getElementById('check-empty').style.display = outcomes.length ? 'none' : '';
     }
 
@@ -437,14 +455,7 @@
   function appendCheckRow(p) {
     const body = document.getElementById('check-body');
     if (!body) return;
-    const cls = p.exists ? 'badge-green' : 'badge-red';
-    body.insertAdjacentHTML('beforeend',
-      `<tr>
-        <td>${body.children.length + 1}</td>
-        <td class="mono">${esc(p.number)}</td>
-        <td><span class="badge ${cls}">${p.exists ? 'yes' : 'no'}</span></td>
-        <td>${esc(p.kind || '')}</td>
-      </tr>`);
+    body.insertAdjacentHTML('beforeend', checkRowHtml(p, body.children.length));
     body.parentElement.scrollTop = body.parentElement.scrollHeight;
   }
 

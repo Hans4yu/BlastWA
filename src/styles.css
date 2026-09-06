@@ -730,3 +730,29 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
   white-space: nowrap;
 }
 
+
+/* checker results: compact dot status + quiet row tint (replaces badges) */
+.wa-yes, .wa-no {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wa-yes::before, .wa-no::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.wa-yes { color: var(--ok); }
+.wa-yes::before { background: var(--ok); }
+.wa-no { color: var(--danger); }
+.wa-no::before { background: var(--danger); }
+#check-body tr.check-valid td {
+  background: color-mix(in srgb, var(--ok) 7%, transparent);
+}
+#check-body tr.check-invalid td {
+  background: color-mix(in srgb, var(--danger) 5%, transparent);
+}
