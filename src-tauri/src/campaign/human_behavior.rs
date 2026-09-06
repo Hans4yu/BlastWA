@@ -174,10 +174,9 @@ impl HumanBehaviorEngine {
         }
     }
 
-    fn base_delay_ms(&self) -> u64 {
+    fn base_delay_ms(&self, lo: f64, hi: f64) -> u64 {
         let mut rng = rand::thread_rng();
-        let lo = self.config.delay_min_s;
-        let hi = self.config.delay_max_s.max(lo + 0.1);
+        let hi = hi.max(lo + 0.1);
         let mean = (lo + hi) / 2.0;
         let std_dev = (hi - lo) / 4.0;
 
@@ -231,11 +230,13 @@ impl HumanBehaviorEngine {
     /// order: base gaussian -> personality -> time-of-day -> backoff -> rhythm rest
     pub fn next_wait(&mut self, last_message: &str) -> DelayDecision {
         let mut rng = rand::thread_rng();
+        let lo = self.config.delay_min_s;
+        let hi = self.config.delay_max_s.max(lo + 0.1);
 
         if self.config.preset == Preset::Off {
             // legacy flat uniform mode, mirrors original app behavior
-            let lo = (self.config.delay_min_s * 1000.0) as u64;
-            let hi = (self.config.delay_max_s * 1000.0) as u64;
+            let lo = (lo * 1000.0) as u64;
+            let hi = (hi * 1000.0) as u64;
             return DelayDecision {
                 wait: Duration::from_millis(rng.gen_range(lo..=hi)),
                 reason: "flat".into(),
@@ -243,7 +244,28 @@ impl HumanBehaviorEngine {
             };
         }
 
-        let mut ms = self.apply_personality(self.base_delay_ms());
+        // Cautious stretches the base range: same gaussian shape, a 1.5x
+        // floor and a 2x ceiling — meaningfully slower without changing
+        // the character of the pacing.
+        let (lo, hi) = if self.config.preset == Preset::Cautious {
+            (lo * 1.5, hi * 2.0)
+        } else {
+            (lo, hi)
+        };
+
+        if self.config.preset == Preset::Custom {
+            // pure gaussian on the exact typed range: no per-account style,
+            // quiet hours, error backoff, typing or burst rests
+            let ms = self.base_delay_ms(lo, hi);
+            let clamped = ms.clamp(self.config.min_delay_ms, self.config.max_delay_ms);
+            return DelayDecision {
+                wait: Duration::from_millis(clamped),
+                reason: "custom-gaussian".into(),
+                state_after: RhythmState::Active,
+            };
+        }
+
+        let mut ms = self.apply_personality(self.base_delay_ms(lo, hi));
 
         if self.config.enable_time_of_day {
             let hour = chrono::Local::now().format("%H").to_string();

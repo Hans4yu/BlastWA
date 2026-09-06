@@ -47,12 +47,18 @@
       <div class="field" style="margin-bottom:0">
         <label>Human Mode default preset</label>
         <select id="human-preset">
-          <option value="off">Off</option>
-          <option value="natural">Natural</option>
-          <option value="cautious">Cautious</option>
-          <option value="custom">Custom</option>
+          <option value="off">Off — flat: exactly min–max seconds</option>
+          <option value="natural">Natural (recommended) — human-like pacing</option>
+          <option value="cautious">Cautious — human-like but slower &amp; safer</option>
+          <option value="custom">Custom — pure gaussian on min–max only</option>
         </select>
       </div>
+      <p class="panel-note" style="margin:8px 0 0">
+        These defaults prefill the Send Campaign page (delay fields and preset) until you
+        change them there. <b>Off</b> waits exactly min–max seconds; <b>Natural</b> adds
+        human-like variation; <b>Cautious</b> is ≈1.5–2× slower; <b>Custom</b> is a plain
+        gaussian on the range.
+      </p>
     </div>
   </div>
 
@@ -183,7 +189,7 @@
     await invoke('save_config', {
       defaultDelayMin: Number($('delay-min').value),
       defaultDelayMax: Number($('delay-max').value),
-      humanPreset: $('human-preset').value,
+      humanModePreset: $('human-preset').value,
       apiEnabled: $('api-enabled').checked,
       apiPort: Number($('api-port').value),
     });

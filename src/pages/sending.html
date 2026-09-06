@@ -65,12 +65,18 @@
       <div class="field">
         <label>Human Mode preset</label>
         <select id="human-preset">
-          <option value="off">Off (flat delay, like original app)</option>
-          <option value="natural" selected>Natural (recommended)</option>
-          <option value="cautious">Cautious (slow &amp; safe)</option>
-          <option value="custom">Custom</option>
+          <option value="off">Off — flat: exactly min–max seconds</option>
+          <option value="natural" selected>Natural (recommended) — human-like pacing</option>
+          <option value="cautious">Cautious — human-like but slower &amp; safer</option>
+          <option value="custom">Custom — pure gaussian on min–max only</option>
         </select>
       </div>
+      <p class="panel-note" style="margin:0 0 10px">
+        Delay min/max is the <b>base range</b> in seconds. The preset shapes the real wait:
+        <b>Off</b> = flat uniform, <b>Natural</b> = human-like (per-account style, quiet hours,
+        error backoff), <b>Cautious</b> = same but ≈1.5–2× slower, <b>Custom</b> = gaussian on
+        exactly this range. Defaults come from Settings &gt; Default Delays.
+      </p>
       <div class="field checkbox-label">
         <input type="checkbox" id="safe-mode" />
         <label for="safe-mode">Safe mode (verify chat exists before send)</label>
@@ -411,6 +417,25 @@
     addCleanup(() => clearInterval(chipPoll));
 
     restoreDraft();
+    // Settings defaults fill the delay/preset fields whenever the user has
+    // not explicitly chosen values: the page used to hardcode 3/9 + natural,
+    // so anything typed in Settings > Default Delays never reached here.
+    // A draft value that differs from those legacy hardcodes means the user
+    // picked it and wins.
+    try {
+      const cfg = await invoke('get_config');
+      if ($('delay-min').value === '3' && cfg.default_delay_min != null) {
+        $('delay-min').value = cfg.default_delay_min;
+      }
+      if ($('delay-max').value === '9' && cfg.default_delay_max != null) {
+        $('delay-max').value = cfg.default_delay_max;
+      }
+      const preset = String(cfg.human_mode_preset || 'natural');
+      if ($('human-preset').value === 'natural' && $('human-preset').querySelector(`option[value="${preset}"]`)) {
+        $('human-preset').value = preset;
+      }
+      saveDraft();
+    } catch (e) { /* config unavailable: keep whatever the draft had */ }
     // restoreDraft may have flipped the checkbox: re-sync the picker
     syncScheduleUi();
 
