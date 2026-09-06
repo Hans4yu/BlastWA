@@ -696,6 +696,15 @@
         `\nPick a .txt, .csv or .xlsx file — one contact per line: number|fullname|var1|var2|...`);
       return;
     }
+    // import is a REPLACE operation: gate it or a small file silently
+    // destroys a large existing list
+    const current = Number(document.getElementById('total-count').textContent) || 0;
+    if (current > 0 && !(await window.uiConfirm(
+      `Importing will REPLACE the current send list (${current} contact${current === 1 ? '' : 's'})` +
+      ` with the contents of "${path.split(/[\\/]/).pop()}". Continue?`,
+      { title: 'Replace Contact List' }))) {
+      return;
+    }
     try {
       const res = await invoke('import_contacts', { path, removeDupes });
       if (res && res.mock) {

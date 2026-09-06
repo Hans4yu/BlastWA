@@ -128,6 +128,7 @@ async fn status(State(state): State<AppState>) -> (StatusCode, Json<ApiResponse<
         running: state.running.load(Ordering::Relaxed),
         sent: state.sent.load(Ordering::Relaxed),
         failed: state.failed.load(Ordering::Relaxed),
+        total: state.total.load(Ordering::Relaxed),
     };
     ok(data)
 }
@@ -137,6 +138,8 @@ struct StatusData {
     running: bool,
     sent: u32,
     failed: u32,
+    /// contacts queued for the current campaign (0 when idle)
+    total: u32,
 }
 
 async fn stop(State(state): State<AppState>) -> (StatusCode, Json<ApiResponse<String>>) {

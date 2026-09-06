@@ -642,6 +642,11 @@
         } else if (interactive.rows) {
           payloadExtra.listMessage = interactive;
         }
+        // an empty blast would burn the whole delay budget sending nothing
+        if (!$('msg-body').value.trim() && !attachmentPath && !payloadExtra.catalogProductId && !payloadExtra.listMessage) {
+          alert('Write a message first — or attach a file / pick a list or product message. An empty blast would only burn through the list.');
+          return;
+        }
         // a hidden picker never schedules, even if it still holds a value
         const scheduleRaw = $('schedule-enabled').checked ? $('schedule-at').value : '';
         const selected = selectedAccountNames();

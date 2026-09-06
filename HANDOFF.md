@@ -16,6 +16,15 @@ Complete the command-modularization refactor (Priority 2 of the 2026-09-05 hando
 - `combine_launch_and_discovery` (deleted in abdb7a5, tests orphaned) restored inside `commands/accounts.rs` and wired into `launch_session`'s failure path; the bin tests compile and pass again.
 - `AppError` deduplicated in `src-tauri/src/error.rs` (exported via `lib.rs`).
 
+### This pass (2026-09-06, closing 2): Medium-severity audit fixes — matrix cleared
+All five Medium findings from the audit are fixed:
+- **Import replace gate** (`contacts.html`): importing over a non-empty list now requires an explicit confirm naming the count and the file; cancel leaves the list untouched. Live-verified cancel/ok/restore paths.
+- **REST campaign total** (`pipeline.rs` execute + `/api/status`): state.total is set from the queued contacts and exposed in the status response (previously always 0 for API campaigns).
+- **CDP driver leak** (`pipeline.rs`): attach/launch handler tasks are tracked per account (`attach_tasks`); the previous driver is aborted on re-attach and on evict instead of being forgotten. AccountSession.handler_task is now owned by the pipeline.
+- **Watcher slot leak on panic** (`watcher.rs`): each per-account worker is supervised; the in-flight slot frees even if the worker panics.
+- **Empty-message guard** (`sending.html` + `commands/campaigns.rs`): an empty body with no attachment/list/product message is rejected before queueing — frontend for UX, backend as authority. Live-verified.
+Probe note: uiConfirm-gated flows must be driven fire-and-forget from CDP (awaitPromise deadlocks on the gate it has to click itself).
+
 ### This pass (2026-09-06, closing): High-severity campaign fixes (from the full audit matrix)
 - **Swallowed account-level errors fixed** (`commands/campaigns.rs`): `let _ = run_campaign` is gone — per-account failures are captured, logged (`log::error`), pushed to the Log page as a `failed` entry with the reason, and the history record now ends `failed` (all accounts died) / `partial` (some) / `stopped` (cancelled) / `completed`, via the unit-tested `final_status()`. log.html colors unknown statuses red automatically.
 - **Start no longer hangs on a QR wait**: start_campaign now does an attach-only pre-flight (`get_injector_attached` + `is_logged_in`) and fails fast — "account X is not running — open it on the Dashboard first" / "not logged in — scan the QR". The old `get_injector` path launched chrome and sat up to 3 minutes per account with a dead Start button; the launcher wrapper is removed from the Pipeline. Sending page: the Start button shows "Preparing…" and disables during pre-flight. Verified live: start against a never-opened account fails in **6 ms** with a guided message, no chrome spawned.

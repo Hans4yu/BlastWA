@@ -41,6 +41,16 @@ pub(crate) async fn start_campaign(
     if contacts.is_empty() {
         return Err("contact list is empty - import numbers first".into());
     }
+    // an empty blast would burn the humanized delay budget sending nothing;
+    // the frontend guards this too — the backend must not trust it
+    let has_attachment = attachment_path.as_deref().map_or(false, |p| !p.trim().is_empty());
+    let has_interactive = list_message.as_ref().map_or(false, |v| !v.is_null())
+        || catalog_product_id.as_deref().map_or(false, |s| !s.trim().is_empty());
+    if message.trim().is_empty() && !has_attachment && !has_interactive {
+        return Err(
+            "message is empty — write a message, attach a file, or pick a list/product message before starting".into(),
+        );
+    }
 
     let cfg = ctx.cfg.lock().unwrap().clone();
     let preset = match human_preset.as_deref() {

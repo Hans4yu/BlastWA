@@ -30,6 +30,11 @@ pub struct Pipeline {
     /// minutes, so it must NOT be serialized behind the `pages` map lock:
     /// status probes need that map while a launch is in flight.
     launch_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+    /// cdp event-handler tasks per account. they used to be spawned and
+    /// forgotten, so every dead-session -> re-attach cycle accumulated one
+    /// more detached websocket driver; the previous task is now aborted
+    /// when its account re-attaches or is evicted.
+    attach_tasks: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
 }
 
 impl Pipeline {
@@ -41,6 +46,20 @@ impl Pipeline {
             wpp_ready: Arc::new(tokio::sync::Mutex::new(std::collections::HashSet::new())),
             wpp_inject_lock: Arc::new(tokio::sync::Mutex::new(())),
             launch_locks: Arc::new(Mutex::new(HashMap::new())),
+            attach_tasks: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// register the connection driver for an account, aborting the previous
+    /// one (its pages are being replaced or are already dead)
+    async fn track_attach_task(&self, account: &str, task: tokio::task::JoinHandle<()>) {
+        if let Some(old) = self
+            .attach_tasks
+            .lock()
+            .await
+            .insert(account.to_string(), task)
+        {
+            old.abort();
         }
     }
 
@@ -101,6 +120,9 @@ impl Pipeline {
             .await
             .with_context(|| format!("launching chrome for account {account}"))?;
         let page = session.page.clone();
+        // track the launch's connection driver so a later re-attach or evict
+        // can abort it instead of leaving it detached
+        self.track_attach_task(account, session.handler_task).await;
 
         // first launch requires a manual QR scan; give the user 3 minutes.
         // session persists on disk after that (user-data-dir), so this is once ever.
@@ -184,10 +206,14 @@ impl Pipeline {
     }
 
     /// drop a cached page handle (dead cdp connection) and its wpp memo,
-    /// so the next access re-attaches fresh
+    /// so the next access re-attaches fresh; the connection driver is
+    /// aborted along with them
     pub async fn evict_page(&self, name: &str) {
         self.pages.lock().await.remove(name);
         self.wpp_ready.lock().await.remove(name);
+        if let Some(task) = self.attach_tasks.lock().await.remove(name) {
+            task.abort();
+        }
     }
 
     /// guarantee wpp is available on an account's page. serialized globally
@@ -287,8 +313,9 @@ impl Pipeline {
                 }
             }
         });
-        // keep the handler alive for the lifetime of the app
-        std::mem::forget(handler_task);
+        // tracked: the previous driver for this account is aborted here — its
+        // pages are being replaced and its socket belongs to a dead session
+        self.track_attach_task(account, handler_task).await;
 
         // target discovery on a fresh cdp connection is async — pages() can
         // return an empty/partial list right after connect, so retry until
@@ -373,6 +400,8 @@ impl Pipeline {
         // reset counters, flip running flag
         self.state.sent.store(0, Ordering::Relaxed);
         self.state.failed.store(0, Ordering::Relaxed);
+        // the rest path must report the same total the gui path does
+        self.state.total.store(contacts.contacts.len() as u32, Ordering::Relaxed);
         self.state.running.store(true, Ordering::Relaxed);
 
         // fresh cancel token per campaign so previous stops don't leak

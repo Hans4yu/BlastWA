@@ -12,9 +12,9 @@ pub struct AccountSession {
     pub page: Page,
     #[allow(dead_code)]
     user_data_dir: PathBuf,
-    /// keeps the cdp event pump alive for this browser instance
-    #[allow(dead_code)]
-    handler_task: tokio::task::JoinHandle<()>,
+    /// keeps the cdp event pump alive for this browser instance; owned by
+    /// the pipeline so a re-attach/evict can abort the previous driver
+    pub handler_task: tokio::task::JoinHandle<()>,
 }
 
 #[derive(Clone)]

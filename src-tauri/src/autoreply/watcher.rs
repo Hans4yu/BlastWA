@@ -99,7 +99,8 @@ pub async fn run(pipeline: Pipeline, data_dir: PathBuf) {
             let rules = rules.clone();
             let processed = processed.clone();
             let in_flight = in_flight.clone();
-            tokio::spawn(async move {
+            let supervisor_account = account.clone();
+            let worker = tokio::spawn(async move {
                 let result = tokio::time::timeout(
                     // generous enough for a first-time wpp bootstrap (cdp +
                     // bundle execution has its own 90s readiness deadline);
@@ -119,7 +120,13 @@ pub async fn run(pipeline: Pipeline, data_dir: PathBuf) {
                         log::debug!("auto-reply watch {account}: cycle timed out");
                     }
                 }
-                in_flight.lock().await.remove(&account);
+            });
+            // supervisor: the in-flight slot must free even if the worker
+            // panics — a leaked slot would permanently silence that account
+            let supervisor_flight = in_flight.clone();
+            tokio::spawn(async move {
+                let _ = worker.await;
+                supervisor_flight.lock().await.remove(&supervisor_account);
             });
         }
     }
