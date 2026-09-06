@@ -21,7 +21,7 @@
         <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
           style="display:none" onchange="handleImport(this)" />
         <button class="btn" id="btn-import-wa">Import from WhatsApp phonebook</button>
-        <select id="wa-account" style="width:150px"><option value="">Default</option></select>
+        <select id="wa-account" style="width:170px"><option value="">No linked accounts</option></select>
         <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
       </div>
       <span style="font-size:11px;color:var(--text-dim)">
@@ -69,7 +69,7 @@
   <div class="panel-body">
     <div class="flex-between">
       <div class="row">
-        <select id="check-account" style="width:180px"><option value="">Default</option></select>
+        <select id="check-account" style="width:180px"><option value="">No linked accounts</option></select>
         <button class="btn" id="btn-run-check">Run Check</button>
         <button class="btn" id="btn-keep-valid" disabled>Keep Valid Only</button>
         <button class="btn" id="btn-export-valid" disabled>Export CSV (valid)</button>
@@ -199,21 +199,34 @@
       }
     });
 
-    // checker account options mirror the send page account select
+    // both account selects list real linked accounts; the "Default" label
+    // was a lie — empty meant "no account", which cannot run a phonebook
+    // import or a checker against whatsapp at all
     try {
       const accounts = await invoke('list_accounts');
       const list = Array.isArray(accounts) ? accounts : [];
+      const opts = list.map((a) => `<option value="${a.name}">${a.name}</option>`).join('');
+      const waSel = document.getElementById('wa-account');
+      const chkSel = document.getElementById('check-account');
       if (list.length) {
-        const opts = list.map((a) => `<option value="${a.name}">${a.name}</option>`).join('');
-        document.getElementById('check-account').innerHTML = opts;
-        document.getElementById('wa-account').innerHTML =
-          '<option value="">Default</option>' + opts;
+        waSel.innerHTML = opts;
+        chkSel.innerHTML = opts;
+      } else {
+        const empty = '<option value="">No linked accounts</option>';
+        waSel.innerHTML = empty;
+        chkSel.innerHTML = empty;
       }
+      document.getElementById('btn-import-wa').disabled = !list.length;
+      document.getElementById('btn-run-check').disabled = !list.length;
     } catch (e) {}
 
     // U14: pull the account's whatsapp phonebook into the send list
     document.getElementById('btn-import-wa').addEventListener('click', async () => {
       const acct = document.getElementById('wa-account').value;
+      if (!acct) {
+        alert('Select a WhatsApp account first — the phonebook import runs against a linked account. Add one on the Dashboard if the list is empty.');
+        return;
+      }
       const btn = document.getElementById('btn-import-wa');
       btn.disabled = true;
       btn.textContent = 'Importing...';
@@ -306,6 +319,11 @@
     });
 
     document.getElementById('btn-run-check').addEventListener('click', async () => {
+      const acct = document.getElementById('check-account').value;
+      if (!acct) {
+        alert('Select a WhatsApp account first — the checker verifies numbers against a linked account. Add one on the Dashboard if the list is empty.');
+        return;
+      }
       const btn = document.getElementById('btn-run-check');
       // an explicit fresh check may wipe the previous results, same contract
       // as the groups explicit refresh

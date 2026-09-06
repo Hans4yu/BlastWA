@@ -78,6 +78,8 @@ async function navigate(state) {
     if (!els.has(id)) els.set(id, makeEl(id));
     return els.get(id);
   };
+  // the page guards its checker buttons behind a selected linked account
+  $('check-account').value = 'test-account';
 
   const invokes = [];
   const win = {
