@@ -132,15 +132,21 @@ pub(crate) async fn start_campaign(
         chunks[slot].contacts.push(c.clone());
     }
 
-    // resolve every account session up front (qr waits happen sequentially)
+    // pre-flight: every account must already be running AND logged in.
+    // this used to go through get_injector, which LAUNCHES chrome and sits
+    // in a 3-minute qr wait per account — the start button hung with no
+    // feedback. a start attaches to live sessions only and fails fast.
     let mut injectors = Vec::with_capacity(account_names.len());
     for name in &account_names {
-        injectors.push(
-            ctx.pipeline
-                .get_injector(name)
-                .await
-                .map_err(|e| e.to_string())?,
-        );
+        let injector = ctx.pipeline.get_injector_attached(name).await.map_err(|e| {
+            format!("account \"{name}\" is not running — open it on the Dashboard first ({e:#})")
+        })?;
+        if !injector.is_logged_in().await.unwrap_or(false) {
+            return Err(format!(
+                "account \"{name}\" is not logged in to WhatsApp — open it from the Dashboard, scan the QR, then start again"
+            ));
+        }
+        injectors.push(injector);
     }
 
     let state = ctx.state.clone();
@@ -188,6 +194,10 @@ pub(crate) async fn start_campaign(
         let acc_sent = Arc::new(std::sync::atomic::AtomicU32::new(0));
         let acc_failed = Arc::new(std::sync::atomic::AtomicU32::new(0));
         let total_accounts = injectors.len();
+        // account-level failures (dead session, cdp collapse) used to be
+        // swallowed by `let _ = run_campaign` — the history then said
+        // "completed" while nothing had been sent
+        let mut account_errors: Vec<String> = Vec::new();
 
         for (i, inj) in injectors.into_iter().enumerate() {
             if token_for_status.is_cancelled() {
@@ -207,9 +217,10 @@ pub(crate) async fn start_campaign(
             let base_failed = acc_failed.load(Ordering::Relaxed);
             let closure_counters = counters.clone();
             let logs = logs.clone();
+            let err_logs = logs.clone();
             let name = campaign_name.clone();
             let progress_app = app_for_progress.clone();
-            let _ = run_campaign(
+            let result = run_campaign(
                 inj,
                 &chunks[i],
                 &message_variants,
@@ -243,10 +254,26 @@ pub(crate) async fn start_campaign(
                 },
             )
             .await;
+            if let Err(e) = &result {
+                let msg = format!("{e:#}");
+                log::error!("campaign account {} failed: {msg}", account_names[i]);
+                account_errors.push(format!("{}: {msg}", account_names[i]));
+                // surface it on the Log page with the reason attached
+                err_logs.lock().unwrap().push(LogEntry {
+                    timestamp: chrono::Local::now(),
+                    number: account_names[i].clone(),
+                    fullname: String::new(),
+                    status: "failed".into(),
+                    error_reason: Some(msg),
+                    campaign_name: campaign_name.clone(),
+                });
+            }
             acc_sent.store(counters.sent.load(Ordering::Relaxed), Ordering::Relaxed);
             acc_failed.store(counters.failed.load(Ordering::Relaxed), Ordering::Relaxed);
         }
-        // finalize the history record with the real counters (U6)
+        // finalize the history record with the real counters (U6) and an
+        // honest status: a run where every account died is "failed", not
+        // "completed"
         let finished = CampaignRecord {
             started_at,
             account: account_label,
@@ -254,14 +281,22 @@ pub(crate) async fn start_campaign(
             total: state.total.load(Ordering::Relaxed),
             sent: state.sent.load(Ordering::Relaxed),
             failed: state.failed.load(Ordering::Relaxed),
-            status: if token_for_status.is_cancelled() {
-                "stopped".into()
-            } else {
-                "completed".into()
-            },
+            status: final_status(
+                token_for_status.is_cancelled(),
+                account_errors.len(),
+                total_accounts,
+            )
+            .into(),
         };
         if let Err(e) = finalize_last_campaign_record(&AppConfig::app_dir(), &finished) {
             log::warn!("failed to finalize campaign history: {e:#}");
+        }
+        if !account_errors.is_empty() {
+            log::error!(
+                "campaign finished with {} failed account(s): {}",
+                account_errors.len(),
+                account_errors.join("; ")
+            );
         }
         state.running.store(false, Ordering::Relaxed);
     });
@@ -271,6 +306,35 @@ pub(crate) async fn start_campaign(
         payload["scheduled_at"] = serde_json::json!(at.format("%Y-%m-%dT%H:%M").to_string());
     }
     Ok(payload)
+}
+
+/// final history status: user cancellation wins, then full/partial account
+/// failure, then success
+fn final_status(cancelled: bool, failed_accounts: usize, total_accounts: usize) -> &'static str {
+    if cancelled {
+        "stopped"
+    } else if total_accounts > 0 && failed_accounts >= total_accounts {
+        "failed"
+    } else if failed_accounts > 0 {
+        "partial"
+    } else {
+        "completed"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::final_status;
+
+    #[test]
+    fn status_classification() {
+        assert_eq!(final_status(true, 0, 2), "stopped");
+        assert_eq!(final_status(true, 2, 2), "stopped", "cancel outranks failure");
+        assert_eq!(final_status(false, 2, 2), "failed");
+        assert_eq!(final_status(false, 1, 2), "partial");
+        assert_eq!(final_status(false, 0, 2), "completed");
+        assert_eq!(final_status(false, 0, 1), "completed");
+    }
 }
 
 #[tauri::command]

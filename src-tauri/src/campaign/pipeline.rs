@@ -334,12 +334,9 @@ impl Pipeline {
         Ok(page)
     }
 
-    /// public entry for gui commands: session + wpp bootstrap in one call
-    pub async fn get_injector(&self, account: &str) -> Result<crate::browser::js_injector::JsInjector> {
-        let page = self.get_page(account).await?;
-        Ok(crate::browser::js_injector::JsInjector::new(&page))
-    }
-
+    /// rest/blast channel entry: consumes one request from the api server.
+    /// (the old get_injector launcher wrapper is gone — every gui command
+    /// attaches to live sessions and fails fast instead of waiting on a qr)
     async fn execute(&self, req: BlastRequest) -> Result<()> {
         // double-check despite the api guard (race between concurrent posts)
         if self.state.running.load(Ordering::Relaxed) {

@@ -629,6 +629,11 @@
     }
 
     $('btn-start').onclick = async () => {
+      const btn = $('btn-start');
+      // pre-flight (attach + login probe) runs on the rust side and can take
+      // a few seconds on a cold wpp inject: never let the button look dead
+      btn.disabled = true;
+      btn.textContent = 'Preparing…';
       try {
         let interactive = interactivePayload();
         var payloadExtra = {};
@@ -665,6 +670,10 @@
         }
       } catch (e) {
         alert('Start failed: ' + (e && e.message ? e.message : e));
+        $('current-status').textContent = '';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send Now';
       }
     };
 
