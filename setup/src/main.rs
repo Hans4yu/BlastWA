@@ -521,6 +521,17 @@ unsafe fn text_out(hdc: HDC, x: i32, y: i32, s: &str) {
     TextOutW(hdc, x, y, to_wide(s).as_ptr(), s.encode_utf16().count() as i32);
 }
 
+/// horizontally center s inside [area_x, area_x + area_w] on the current
+/// baseline — measured with the *selected* font, not hardcoded offsets
+unsafe fn text_centered(hdc: HDC, area_x: i32, area_w: i32, y: i32, s: &str) {
+    let wide = to_wide(s);
+    let len = (wide.len() as i32) - 1; // exclude the trailing nul
+    let mut size: SIZE = std::mem::zeroed();
+    GetTextExtentPoint32W(hdc, wide.as_ptr(), len, &mut size);
+    let x = area_x + ((area_w - size.cx) / 2).max(0);
+    TextOutW(hdc, x, y, wide.as_ptr(), len);
+}
+
 unsafe fn update_wizard_view() {
     if UNINSTALL_MODE {
         update_uninstall_view();
@@ -880,53 +891,57 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
 
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, rgb(255, 255, 255));
+            // sidebar block: everything centered on the 160px rail, icon
+            // already sits at (160-64)/2
             SelectObject(hdc, FONT_TITLE);
-            TextOutW(hdc, 40, 115, to_wide("BlastWA\0").as_ptr(), 7);
+            text_centered(hdc, 0, 160, 118, "BlastWA");
             SelectObject(hdc, FONT_BODY);
             if UNINSTALL_MODE {
-                TextOutW(hdc, 34, 145, to_wide("Uninstall\0").as_ptr(), 9);
+                text_centered(hdc, 0, 160, 150, "Uninstall");
             } else {
-                TextOutW(hdc, 34, 145, to_wide("Setup Wizard\0").as_ptr(), 12);
+                text_centered(hdc, 0, 160, 150, "Setup Wizard");
             }
-            TextOutW(hdc, 55, 170, to_wide("v0.2.0\0").as_ptr(), 6);
+            SetTextColor(hdc, rgb(206, 236, 232));
+            text_centered(hdc, 0, 160, 174, "v0.2.0");
 
             SetTextColor(hdc, rgb(30, 30, 30));
             if UNINSTALL_MODE {
+                // content rhythm: title at y28, body from y72 stepping 26
                 match UNINSTALL_STEP {
                     UninstallStep::Welcome => {
                         SelectObject(hdc, FONT_TITLE);
-                        text_out(hdc, 180, 25, "Uninstall BlastWA");
+                        text_out(hdc, 185, 28, "Uninstall BlastWA");
                         SelectObject(hdc, FONT_BODY);
-                        text_out(hdc, 180, 70, "BlastWA will be removed from your computer.");
-                        text_out(hdc, 180, 95, "Program files, shortcuts and registry entries will be deleted.");
-                        text_out(hdc, 180, 145, "Click Next to continue.");
+                        text_out(hdc, 185, 72, "BlastWA will be removed from your computer.");
+                        text_out(hdc, 185, 98, "Program files, shortcuts and registry entries will be deleted.");
+                        text_out(hdc, 185, 145, "Click Next to continue.");
                     }
                     UninstallStep::Options => {
                         SelectObject(hdc, FONT_TITLE);
-                        text_out(hdc, 180, 25, "Remove Account Data?");
+                        text_out(hdc, 185, 28, "Remove Account Data?");
                         SelectObject(hdc, FONT_BODY);
-                        text_out(hdc, 180, 70, "Account data holds your WhatsApp sessions and profiles.");
-                        text_out(hdc, 180, 95, "Leave the box unchecked to keep it for a future install.");
-                        text_out(hdc, 180, 120, "Check the box to delete it permanently.");
-                        text_out(hdc, 180, 190, "Data location:");
-                        text_out(hdc, 180, 210, &app_data_dir().to_string_lossy());
+                        text_out(hdc, 185, 72, "Account data holds your WhatsApp sessions and profiles.");
+                        text_out(hdc, 185, 98, "Leave the box unchecked to keep it for a future install.");
+                        text_out(hdc, 185, 124, "Check the box to delete it permanently.");
+                        text_out(hdc, 185, 196, "Data location:");
+                        text_out(hdc, 185, 216, &app_data_dir().to_string_lossy());
                     }
                     UninstallStep::Working => {
                         SelectObject(hdc, FONT_TITLE);
-                        text_out(hdc, 180, 25, "Uninstalling BlastWA...");
+                        text_out(hdc, 185, 28, "Uninstalling BlastWA...");
                         SelectObject(hdc, FONT_BODY);
-                        text_out(hdc, 180, 70, "Please wait while BlastWA is being removed.");
+                        text_out(hdc, 185, 72, "Please wait while BlastWA is being removed.");
                     }
                     UninstallStep::Done => {
                         SelectObject(hdc, FONT_TITLE);
-                        text_out(hdc, 180, 25, "Uninstall Complete");
+                        text_out(hdc, 185, 28, "Uninstall Complete");
                         SelectObject(hdc, FONT_BODY);
-                        text_out(hdc, 180, 70, "BlastWA has been removed from your computer.");
+                        text_out(hdc, 185, 72, "BlastWA has been removed from your computer.");
                         if UNINSTALL_KEEP_DATA {
-                            text_out(hdc, 180, 95, "Your account data was kept at:");
-                            text_out(hdc, 180, 115, &app_data_dir().to_string_lossy());
+                            text_out(hdc, 185, 98, "Your account data was kept at:");
+                            text_out(hdc, 185, 124, &app_data_dir().to_string_lossy());
                         }
-                        text_out(hdc, 180, 150, "Click Finish to exit.");
+                        text_out(hdc, 185, 155, "Click Finish to exit.");
                     }
                 }
                 EndPaint(hwnd, &ps);
