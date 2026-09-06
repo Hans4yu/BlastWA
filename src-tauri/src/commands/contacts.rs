@@ -23,9 +23,20 @@ pub(crate) fn get_contacts(ctx: State<'_, AppCtx>) -> Result<Vec<serde_json::Val
         .collect())
 }
 
+/// persist the send list after every mutation so it survives restarts.
+/// save_json/load_json already existed but nothing called them — the list
+/// used to vanish whenever the app closed.
+fn persist_contacts(ctx: &AppCtx) {
+    let list = ctx.contacts.lock().unwrap();
+    if let Err(e) = list.save_json(&ctx.paths.data.join("contacts.json")) {
+        log::warn!("contacts persist failed: {e:#}");
+    }
+}
+
 #[tauri::command]
 pub(crate) fn clear_contacts(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, String> {
     ctx.contacts.lock().unwrap().contacts.clear();
+    persist_contacts(&ctx);
     Ok(serde_json::json!({ "ok": true }))
 }
 
@@ -41,6 +52,8 @@ pub(crate) fn remove_contacts(
     let before = list.len();
     list.contacts.retain(|c| !kill.contains(&c.number));
     let removed = before - list.len();
+    drop(list);
+    persist_contacts(&ctx);
     Ok(serde_json::json!({ "ok": true, "removed": removed }))
 }
 
@@ -76,6 +89,7 @@ pub(crate) fn import_contacts(
     }
     let count = list.len();
     *ctx.contacts.lock().unwrap() = list;
+    persist_contacts(&ctx);
     Ok(serde_json::json!({ "ok": true, "imported": count }))
 }
 
@@ -128,6 +142,8 @@ pub(crate) fn keep_contacts_only(valid_numbers: Vec<String>, ctx: State<'_, AppC
     let mut list = ctx.contacts.lock().unwrap();
     list.contacts.retain(|c| valid_numbers.contains(&c.number));
     let kept = list.len();
+    drop(list);
+    persist_contacts(&ctx);
     Ok(serde_json::json!({ "ok": true, "kept": kept }))
 }
 
@@ -193,6 +209,8 @@ pub(crate) fn add_generated_contacts(
         list.contacts.push(ContactRow::from_fullname(&num, ""));
         added += 1;
     }
+    drop(list);
+    persist_contacts(&ctx);
     Ok(serde_json::json!({ "ok": true, "added": added }))
 }
 
@@ -263,6 +281,8 @@ pub(crate) async fn import_wa_contacts(
         list.contacts.push(ContactRow::from_fullname(&number, &name));
         added += 1;
     }
+    drop(list);
+    persist_contacts(&ctx);
     Ok(serde_json::json!({ "ok": true, "added": added }))
 }
 

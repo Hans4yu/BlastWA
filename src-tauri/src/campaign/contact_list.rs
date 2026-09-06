@@ -146,6 +146,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn json_roundtrip_survives_restart() {
+        // save_json/load_json sat unwired for months: the send list vanished
+        // on every restart. this pins the restore path the app now uses.
+        let tmp = std::env::temp_dir().join(format!(
+            "blastwa_test_contacts_rt_{}.json",
+            std::process::id()
+        ));
+        let mut list = ContactList::default();
+        list.contacts.push(ContactRow::from_fullname("628123", "Budi Santoso"));
+        list.contacts.push(ContactRow::from_fullname("628124", ""));
+        list.save_json(&tmp).unwrap();
+        let back = ContactList::load_json(&tmp).unwrap();
+        assert_eq!(back.len(), 2);
+        assert_eq!(back.contacts[0].number, "628123");
+        assert_eq!(back.contacts[0].fullname, "Budi Santoso");
+        assert_eq!(back.contacts[1].number, "628124");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
     fn normalize_strips_formatting() {
         assert_eq!(normalize_number("+62 812-3456-7890"), "6281234567890");
         assert_eq!(normalize_number("(021) 555-1234"), "62215551234");

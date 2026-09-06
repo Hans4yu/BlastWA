@@ -16,8 +16,6 @@ mod commands;
 use blastwa_core::config::settings::{AppConfig, DataPaths};
 use blastwa_core::message::template_library::TemplateLibrary;
 
-use tauri::Manager;
-
 struct AppCtx {
     cfg: Mutex<AppConfig>,
     paths: DataPaths,
@@ -132,13 +130,32 @@ fn main() {
 
     let templates = TemplateLibrary::new(&paths.templates);
 
+    // restore the persisted send list: contacts used to be memory-only and
+    // vanished on every restart while save_json/load_json sat unused
+    let contacts_path = paths.data.join("contacts.json");
+    let contacts = if contacts_path.exists() {
+        match ContactList::load_json(&contacts_path) {
+            Ok(list) => {
+                log::info!("restored {} contacts from {}", list.len(), contacts_path.display());
+                list
+            }
+            Err(e) => {
+                log::warn!("contacts restore failed ({e:#}), starting empty");
+                blastwa_core::config::settings::backup_corrupt_file(&contacts_path);
+                ContactList::default()
+            }
+        }
+    } else {
+        ContactList::default()
+    };
+
     let account_service = AccountService::new(AppConfig::app_dir(), paths.accounts.clone());
     let ctx = AppCtx {
         cfg: Mutex::new(cfg),
         paths,
         state,
         pipeline,
-        contacts: Mutex::new(ContactList::default()),
+        contacts: Mutex::new(contacts),
         logs: Arc::new(Mutex::new(Vec::new())),
         templates,
         auth_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -150,13 +167,25 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // profile instances announce themselves in the title bar; the
-            // default instance stays untitled
+            // the window is built here instead of tauri.conf.json so profile
+            // instances can isolate their webview storage: on windows tauri
+            // forces every instance onto AppData\Local\{identifier} unless a
+            // data_directory is set, which made the default and all profiles
+            // share one localStorage (groups cache, checker cache, compose
+            // draft) and clobber each other while running side by side
+            let mut builder = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+                .title("BlastWA - WhatsApp Bulk Sender")
+                .inner_size(1280.0, 820.0)
+                .min_inner_size(980.0, 640.0);
             if let Some(p) = AppConfig::active_profile() {
-                if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.set_title(&format!("BlastWA - WhatsApp Bulk Sender [Profile: {p}]"));
+                builder = builder.title(format!("BlastWA - WhatsApp Bulk Sender [Profile: {p}]"));
+                let dir = AppConfig::app_dir().join("webview");
+                if let Err(e) = std::fs::create_dir_all(&dir) {
+                    log::warn!("profile webview dir create failed: {e}");
                 }
+                builder = builder.data_directory(dir);
             }
+            builder.build()?;
             Ok(())
         })
         .manage(ctx)

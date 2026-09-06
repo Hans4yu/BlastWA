@@ -8,22 +8,19 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [
-      {
-        "title": "BlastWA - WhatsApp Bulk Sender",
-        "width": 1280,
-        "height": 820,
-        "minWidth": 980,
-        "minHeight": 640
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-      "dangerousDisableAssetCspModification": ["script-src"]
+      "dangerousDisableAssetCspModification": [
+        "script-src"
+      ]
     }
   },
   "bundle": {
     "active": true,
-    "icon": ["icons/icon.ico", "icons/icon.png"]
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
   }
 }
