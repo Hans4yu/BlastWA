@@ -346,19 +346,84 @@
       return true;
     }
 
-    restoreCheckFromCache();
-
+    // indexed progress slots: progress events are fire-and-forget broadcasts
+    // (tab switches unregister the listener, so events emitted in that window
+    // are simply lost). assigning by p.checked keeps the table position-stable
+    // instead of append-order-dependent, so a re-navigated page resumes
+    // instead of resetting, and a late-registered listener cannot duplicate
+    // rows when a gap is backfilled by the final resolution.
+    let checkRows = [];
+    if (restoreCheckFromCache()) {
+      // a mid-check return restores the cache into lastOutcomes; the slots
+      // must be seeded too or the next progress event would rebuild the
+      // table from its index alone and drop every restored row
+      checkRows = lastOutcomes.slice();
+    }
     const unlistenCheck = await listen('check_progress', (ev) => {
       if (!document.getElementById('check-body')) return;
       const p = ev.payload || ev;
-      appendCheckRow(p);
-      lastOutcomes.push({ number: p.number, exists: !!p.exists, kind: p.kind || '', error: p.error || undefined });
+      checkRows[p.checked - 1] = { number: p.number, exists: !!p.exists, kind: p.kind || '', error: p.error || undefined };
+      lastOutcomes = checkRows.filter(Boolean);
+      renderCheckRows(lastOutcomes);
       // persist incrementally: a crash or tab switch mid-check keeps what ran
       saveCheckCache(document.getElementById('check-account').value, lastOutcomes);
       applyValidState(lastOutcomes);
-      document.getElementById('check-summary').textContent =
-        `checked ${p.checked}/${p.total}, ${validNumbers.length} valid`;
+      // the completion handler of an orphaned pre-navigation invoke is dead,
+      // so the last progress event is what gets to finish the job here
+      if (p.checked >= p.total) {
+        const btn = document.getElementById('btn-run-check');
+        if (btn) { btn.disabled = false; btn.textContent = 'Run Check'; }
+        document.getElementById('check-summary').textContent =
+          `done: ${validNumbers.length} of ${lastOutcomes.length} numbers are on whatsapp`;
+      } else {
+        document.getElementById('check-summary').textContent =
+          `checked ${p.checked}/${p.total}, ${validNumbers.length} valid`;
+      }
     });
+
+    // safety net for a check that finished while the user was on another tab:
+    // its last progress event may never reach any page, so poll the job state
+    // and un-stick the button when the backend is done
+    const jobPoll = setInterval(async () => {
+      const btn = document.getElementById('btn-run-check');
+      if (!btn || !btn.disabled) return;
+      try {
+        const st = await invoke('check_status');
+        if (st && !st.running) {
+          btn.disabled = false;
+          btn.textContent = 'Run Check';
+          if (Array.isArray(st.outcomes) && st.outcomes.length) {
+            checkRows = st.outcomes.map((o) => ({ number: o.number, exists: !!o.exists, kind: o.kind || '', error: o.error || undefined }));
+            lastOutcomes = checkRows.filter(Boolean);
+            saveCheckCache(document.getElementById('check-account').value, lastOutcomes);
+            renderCheckRows(lastOutcomes);
+            applyValidState(lastOutcomes);
+          }
+          document.getElementById('check-summary').textContent =
+            `done: ${validNumbers.length} of ${lastOutcomes.length} numbers are on whatsapp`;
+        } else if (st && st.running && st.total) {
+          document.getElementById('check-summary').textContent =
+            `check in progress: ${st.checked}/${st.total} — switch tabs freely, this page re-syncs`;
+        }
+      } catch (e) { /* status unavailable: keep waiting */ }
+    }, 3000);
+    addCleanup(() => clearInterval(jobPoll));
+
+    // a check that survived a tab switch is still running in the backend
+    // (its invoke promise died with the old page): surface it and hold the
+    // button instead of inviting a second run that would start from 1 while
+    // the orphan kept streaming from where it was
+    try {
+      const st = await invoke('check_status');
+      if (st && st.running) {
+        const btn = document.getElementById('btn-run-check');
+        btn.disabled = true;
+        btn.textContent = 'Checking...';
+        document.getElementById('check-summary').innerHTML =
+          `check in progress: ${st.checked}/${st.total}` +
+          (lastOutcomes.length ? ' — results stream in below' : ' — switch tabs freely, this page re-syncs');
+      }
+    } catch (e) { /* status unavailable: behave as before */ }
 
     document.getElementById('btn-run-check').addEventListener('click', async () => {
       const acct = document.getElementById('check-account').value;
@@ -367,8 +432,19 @@
         return;
       }
       const btn = document.getElementById('btn-run-check');
+      // refuse before touching the table: the backend also guards this, but
+      // clearing here first would blank a running check's rows
+      try {
+        const st = await invoke('check_status');
+        if (st && st.running) {
+          alert('A number check is already running (' + st.checked + '/' + st.total +
+            ') — wait for it to finish or switch tabs; this page re-syncs with it.');
+          return;
+        }
+      } catch (e) { /* status unavailable: the backend guard still protects */ }
       // an explicit fresh check may wipe the previous results, same contract
       // as the groups explicit refresh
+      checkRows = [];
       lastOutcomes = [];
       validNumbers = [];
       document.getElementById('check-body').innerHTML = '';
@@ -382,7 +458,8 @@
           account: document.getElementById('check-account').value,
         });
         const list = Array.isArray(outcomes) ? outcomes : [];
-        lastOutcomes = list.map((o) => ({ number: o.number, exists: !!o.exists, kind: o.kind || '', error: o.error || undefined }));
+        checkRows = list.map((o) => ({ number: o.number, exists: !!o.exists, kind: o.kind || '', error: o.error || undefined }));
+        lastOutcomes = checkRows.filter(Boolean);
         saveCheckCache(document.getElementById('check-account').value, lastOutcomes);
         renderCheckRows(lastOutcomes);
         applyValidState(lastOutcomes);
@@ -469,13 +546,6 @@
       }
     });
   };
-
-  function appendCheckRow(p) {
-    const body = document.getElementById('check-body');
-    if (!body) return;
-    body.insertAdjacentHTML('beforeend', checkRowHtml(p, body.children.length));
-    body.parentElement.scrollTop = body.parentElement.scrollHeight;
-  }
 
   // shared esc() from window.blastwa (hoisted in main.js); var, not const,
   // because scripts re-execute per navigation and top-level const would

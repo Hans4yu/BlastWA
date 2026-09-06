@@ -29,6 +29,9 @@ struct AppCtx {
     auth_cache: Arc<Mutex<HashMap<String, (std::time::Instant, bool, Option<String>)>>>,
     /// accounts for which a one-shot wpp bootstrap was already kicked off
     wpp_bootstrapped: Arc<Mutex<HashMap<String, bool>>>,
+    /// live number-check snapshot: progress events are lost on tab switches,
+    /// the ui re-syncs from this pollable state instead
+    check_job: Arc<Mutex<blastwa_core::campaign::checker::CheckJobState>>,
 }
 
 fn parse_cli_profile() -> Option<String> {
@@ -160,6 +163,7 @@ fn main() {
         templates,
         auth_cache: Arc::new(Mutex::new(HashMap::new())),
         wpp_bootstrapped: Arc::new(Mutex::new(HashMap::new())),
+        check_job: Arc::new(Mutex::new(blastwa_core::campaign::checker::CheckJobState::default())),
         account_service,
     };
 
@@ -206,6 +210,7 @@ fn main() {
             commands::contacts::remove_contacts,
             commands::contacts::import_contacts,
             commands::contacts::check_numbers_cmd,
+            commands::contacts::check_status,
             commands::contacts::keep_contacts_only,
             commands::contacts::add_generated_contacts,
             commands::contacts::export_valid_numbers,

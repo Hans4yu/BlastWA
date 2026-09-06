@@ -12,4 +12,5 @@ AGENTS.md
 AGENTS.md
 .docs/
 /docs/*
-/docs/**/*.zcode/
+/docs/**/*
+.zcode/

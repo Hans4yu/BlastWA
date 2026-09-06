@@ -1,4 +1,4 @@
-use blastwa_core::campaign::checker::{check_numbers, CheckOutcome};
+use blastwa_core::campaign::checker::{check_numbers, CheckJobState, CheckOutcome};
 use blastwa_core::campaign::contact_list::ContactList;
 use blastwa_core::campaign::import as csv_import;
 use blastwa_core::message::variables::ContactRow;
@@ -115,9 +115,36 @@ pub(crate) async fn check_numbers_cmd(
         .iter()
         .map(|c| c.number.clone())
         .collect();
+    // a second run while one is in flight would interleave progress events
+    // (the "reset to 1" the ui showed after tab switches: the orphaned first
+    // check kept emitting while a fresh one restarted from 1) and both loops
+    // would fight over the same wa page
+    {
+        let mut job = ctx.check_job.lock().unwrap();
+        if job.running {
+            return Err("a number check is already running — wait for it to finish".into());
+        }
+        *job = CheckJobState {
+            running: true,
+            account: account.clone(),
+            checked: 0,
+            total: numbers.len(),
+            outcomes: Vec::new(),
+        };
+    }
     // a running blast shares this page: pace the checker more politely
     let slow_mode = ctx.state.running.load(std::sync::atomic::Ordering::Relaxed);
+    let job_ref = ctx.check_job.clone();
     let outcomes = check_numbers(&injector, &numbers, slow_mode, |checked, tot, outcome| {
+        {
+            // authoritative snapshot: the ui re-syncs from this after a tab
+            // switch, because broadcast events emitted while its listener was
+            // unregistered are simply lost
+            let mut job = job_ref.lock().unwrap();
+            job.checked = checked;
+            job.total = tot;
+            job.outcomes.push(outcome.clone());
+        }
         // stream each result so the contacts page can render live
         let _ = app.emit(
             "check_progress",
@@ -131,9 +158,22 @@ pub(crate) async fn check_numbers_cmd(
             }),
         );
     })
-    .await
-    .map_err(|e| e.to_string())?;
-    Ok(outcomes)
+    .await;
+    {
+        let mut job = ctx.check_job.lock().unwrap();
+        job.running = false;
+        if let Ok(list) = &outcomes {
+            job.outcomes = list.clone();
+        }
+    }
+    outcomes.map_err(|e| e.to_string())
+}
+
+/// pollable check state: lets a re-navigated page discover a check that is
+/// still running in the backend (its invoke promise died with the old page)
+#[tauri::command]
+pub(crate) fn check_status(ctx: State<'_, AppCtx>) -> Result<CheckJobState, String> {
+    Ok(ctx.check_job.lock().unwrap().clone())
 }
 
 /// keep only the listed (checker-validated) numbers in the send list (U9)

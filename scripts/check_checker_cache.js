@@ -38,7 +38,7 @@ function makeEl(id) {
   const el = {
     id,
     _text: '',
-    innerHTML: '',
+    _html: '',
     value: '',
     checked: true,
     disabled: false,
@@ -64,6 +64,10 @@ function makeEl(id) {
   Object.defineProperty(el, 'textContent', {
     get() { return this._text; },
     set(v) { this._text = String(v); },
+  });
+  Object.defineProperty(el, 'innerHTML', {
+    get() { return this._html || ''; },
+    set(v) { this._html = String(v); this._text = String(v).replace(/<[^>]*>/g, ' '); },
   });
   Object.defineProperty(el, 'parentElement', {
     get() { return { scrollTop: 0, scrollHeight: 0 }; },
@@ -94,7 +98,7 @@ async function navigate(state) {
     localStorage: localStorageStub,
     location: { hash: '#/contacts' },
     console: { log() {}, warn() {}, error() {} },
-    alert() {}, uiConfirm: async () => state.confirm !== false, prompt: () => '',
+    alert(msg) { (state.alerts ||= []).push(String(msg)); }, uiConfirm: async () => state.confirm !== false, prompt: () => '',
     setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
     requestAnimationFrame: (cb) => setTimeout(() => cb(16), 0),
     Event: class { constructor(t) { this.type = t; } },
@@ -105,14 +109,23 @@ async function navigate(state) {
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
       })[c]),
       addCleanup() {},
-      listen: async () => () => {},
+      // capture the page's progress handler so scenarios can stream
+      // check_progress events the way the backend would
+      listen: async (ev, handler) => { state.checkHandler = handler; return () => {}; },
       stampName: (b, e) => `${b}.${e}`,
       invoke: async (cmd, args) => {
         invokes.push(cmd);
         if (cmd === 'get_contacts') return state.contacts || [];
         if (cmd === 'list_accounts') return [{ name: 'tes', connected: true }];
+        if (cmd === 'check_status') return state.checkStatus || { running: false };
         if (cmd === 'check_numbers_cmd') {
+          if (state.checkStatus && state.checkStatus.running) {
+            throw new Error('a number check is already running — wait for it to finish');
+          }
           if (state.checkThrows) throw new Error('cdp hiccup');
+          if (state.checkDeferred) {
+            return new Promise((res) => { state.resolveCheck = res; });
+          }
           return state.checkResult || [];
         }
         if (cmd === 'keep_contacts_only') return { kept: (args.validNumbers || []).length };
@@ -127,7 +140,7 @@ async function navigate(state) {
   for (const code of scripts) vm.runInContext(code, ctx, { filename: 'contacts.html' });
   await win.init_contacts();
 
-  return { els, invokes, win, $ };
+  return { els, invokes, win, $, state };
 }
 
 const YES = { number: '6282132102060', exists: true, kind: 'Regular' };
@@ -236,6 +249,53 @@ const ERR = { number: '6281111111111', exists: false, kind: 'Error', error: 'cdp
   await new Promise((r) => setTimeout(r, 30));
   assert('s7 clean 0-hit run carries the re-check hint',
     /0 hits is unusual/.test(j.$('check-summary').innerHTML));
+
+  // --- s8: a check survives tab switches mid-stream (the "reset to 1" bug:
+  // events are fire-and-forget broadcasts, so the resumed page must hold
+  // position-stable slots and finish the run from its own listener) ---
+  const midState = { alerts: [], checkDeferred: true };
+  const m1 = await navigate(midState);
+  m1.$('btn-run-check')._h.click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert('s8 in-flight check holds the button',
+    m1.$('btn-run-check').disabled === true);
+  midState.checkHandler({ payload: { checked: 1, total: 3, number: '6281111111111', exists: true, kind: 'Regular' } });
+  midState.checkHandler({ payload: { checked: 2, total: 3, number: '6282222222222', exists: false, kind: 'Not Found' } });
+  await new Promise((r) => setTimeout(r, 10));
+  assert('s8 two streamed rows after two events',
+    (m1.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 2);
+  assert('s8 summary streams checked 2/3',
+    /checked 2\/3/.test(m1.$('check-summary').textContent));
+
+  midState.checkStatus = { running: true, checked: 2, total: 3 };
+  const m2 = await navigate(midState);
+  assert('s8 rows restored after navigating back mid-check',
+    (m2.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 2);
+  assert('s8 back on the tab the running check is surfaced and the button held',
+    m2.$('btn-run-check').disabled === true &&
+    /check in progress: 2\/3/.test(m2.$('check-summary').textContent),
+    m2.$('check-summary').textContent);
+  m2.state.checkHandler({ payload: { checked: 3, total: 3, number: '6283333333333', exists: true, kind: 'Regular' } });
+  await new Promise((r) => setTimeout(r, 10));
+  assert('s8 last event finishes the run on the new page (no reset, no dup)',
+    (m2.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 3 &&
+    m2.$('btn-run-check').disabled === false &&
+    /done: 2 of 3/.test(m2.$('check-summary').textContent),
+    m2.$('check-summary').textContent);
+
+  // --- s9: a second run is refused before it can wipe a running check ---
+  const rState = { alerts: [], checkResult: [YES], checkStatus: { running: false } };
+  const n1 = await navigate(rState);
+  n1.$('btn-run-check')._h.click();
+  await new Promise((r) => setTimeout(r, 10));
+  const rowsBefore = (n1.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length;
+  rState.checkStatus = { running: true, checked: 5, total: 10 };
+  n1.$('btn-run-check')._h.click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert('s9 second run refused with a guided message',
+    rState.alerts.some((a) => /already running/.test(a)), JSON.stringify(rState.alerts));
+  assert('s9 refusal does not wipe the table',
+    (n1.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === rowsBefore);
 
   console.log('');
   console.log(failures ? `${failures} FAILURES` : 'ALL CHECKER CACHE CHECKS PASSED');

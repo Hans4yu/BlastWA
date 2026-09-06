@@ -18,6 +18,19 @@ pub struct CheckOutcome {
     pub error: Option<String>,
 }
 
+/// live snapshot of a check run, pollable from the ui. progress events are
+/// fire-and-forget broadcasts (listeners that navigated away never see them),
+/// so the frontend needs an authoritative state to re-sync from instead of
+/// trusting the event stream alone.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct CheckJobState {
+    pub running: bool,
+    pub account: String,
+    pub checked: usize,
+    pub total: usize,
+    pub outcomes: Vec<CheckOutcome>,
+}
+
 /// check a batch of numbers with polite pacing between requests.
 /// on_progress fires per checked number so the ui can stream results.
 /// `slow_mode` doubles the pacing while a campaign is sending on the same
