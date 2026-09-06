@@ -1,9 +1,11 @@
 //! Account IPC commands, chrome launch/discovery, and live-session probing.
 
-use blastwa_core::account::service::AccountStatus;
+use blastwa_core::account::service::{AccountService, AccountStatus};
 use blastwa_core::api::server;
+use blastwa_core::config::settings::AppConfig;
 use blastwa_core::error::AppError;
 use serde_json::Value;
+use std::process::Command;
 use tauri::State;
 
 use super::super::AppCtx;
@@ -63,10 +65,39 @@ fn combine_launch_and_discovery(
     }
 }
 
+/// chrome path from config, auto-detecting (and persisting) when the
+/// config never went through setup.exe
+fn resolve_chrome_path(ctx: &AppCtx) -> String {
+    let mut cfg = ctx.cfg.lock().unwrap();
+    if cfg.chrome_path.is_empty() {
+        if let Some((path, version)) = blastwa_core::browser::chrome_detect::find_chrome() {
+            cfg.chrome_path = path.to_string_lossy().to_string();
+            cfg.chrome_version = version;
+            if let Err(e) = cfg.save() {
+                log::warn!("persisting detected chrome path: {e:#}");
+            }
+            log::info!("auto-detected chrome: {}", cfg.chrome_path);
+        }
+    }
+    cfg.chrome_path.clone()
+}
+
 /// reuse a live session when one exists; otherwise spawn an isolated chrome
 /// instance with a dedicated per-account user-data-dir. never touches the
 /// user's personal chrome profile. no automation-warning suppression flags.
 async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
+    let chrome_path = resolve_chrome_path(ctx);
+    let accounts_dir = ctx.paths.accounts.clone();
+    launch_session_resolved(accounts_dir, chrome_path, name).await
+}
+
+/// spawn path with every dependency passed in, so it can also run on a
+/// detached task that must not touch AppCtx
+async fn launch_session_resolved(
+    accounts_dir: std::path::PathBuf,
+    chrome_path: String,
+    name: &str,
+) -> Result<u16, String> {
     if let Some(port) = live_session_port(name).await {
         if session_alive(port).await {
             return Ok(port); // reuse, no duplicate spawn
@@ -77,23 +108,6 @@ async fn launch_session(ctx: &AppCtx, name: &str) -> Result<u16, String> {
         list.retain(|(n, _): &(String, u16)| n != name);
     }
 
-    let chrome_path = {
-        let mut cfg = ctx.cfg.lock().unwrap();
-        if cfg.chrome_path.is_empty() {
-            // config never initialized (setup.exe never ran): fall back to
-            // registry/filesystem detection and persist it for later runs
-            if let Some((path, version)) = blastwa_core::browser::chrome_detect::find_chrome() {
-                cfg.chrome_path = path.to_string_lossy().to_string();
-                cfg.chrome_version = version;
-                if let Err(e) = cfg.save() {
-                    log::warn!("persisting detected chrome path: {e:#}");
-                }
-                log::info!("auto-detected chrome: {}", cfg.chrome_path);
-            }
-        }
-        cfg.chrome_path.clone()
-    };
-    let accounts_dir = ctx.paths.accounts.clone();
     let owned = name.to_string();
     let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
     register_live_session(name, port).await;
@@ -293,32 +307,36 @@ async fn add_account_impl(name: String, ctx: State<'_, AppCtx>) -> Result<serde_
     ctx.account_service.save_name(&name)
         .map_err(|e| format!("saving account: {e}"))?;
 
-    // session launch is best effort; failure is reported as a warning,
-    // the saved account can be opened later via Open Browser
-    let mut warning = None;
-    let mut port = None;
-    match live_session_port(&name).await {
-        Some(p) if session_alive(p).await => port = Some(p),
-        _ => match launch_session(&ctx, &name).await {
-            Ok(p) => port = Some(p),
-            Err(e) => {
-                log::warn!("add_account {name}: session launch failed: {e}");
-                warning = Some(format!(
-                    "Account saved, but its Chrome session could not start: {e}. Use Open Browser to retry."
-                ));
-            }
-        },
-    }
-
+    // a live session is reused instantly; a fresh chrome spawn runs in the
+    // background so the add-account modal closes immediately instead of
+    // freezing for the whole chrome startup. the dashboard poll flips the
+    // row to Waiting-for-scan once the browser is up, and a failed launch
+    // surfaces through the row status + Open Browser.
+    let mut port = live_session_port(&name).await;
     if let Some(p) = port {
-        register_live_session(&name, p).await;
-        // the user may have removed this account while its session was still
-        // launching — a finished launch must not resurrect a removed identity
-        if !ctx.account_service.load_names().iter().any(|n| n == &name) {
-            let reg = server::sessions_registry();
-            let mut list = reg.lock().await;
-            list.retain(|(n, _): &(String, u16)| n != &name);
+        if !session_alive(p).await {
+            port = None; // stale entry — the background launch spawns fresh
         }
+    }
+    if port.is_none() {
+        let accounts_dir = ctx.paths.accounts.clone();
+        let chrome_path = resolve_chrome_path(&ctx);
+        let bg_name = name.clone();
+        tauri::async_runtime::spawn(async move {
+            match launch_session_resolved(accounts_dir.clone(), chrome_path, &bg_name).await {
+                Ok(p) => {
+                    register_live_session(&bg_name, p).await;
+                    // a finished launch must not resurrect a removed identity
+                    let svc = AccountService::new(AppConfig::app_dir(), accounts_dir);
+                    if !svc.load_names().iter().any(|n| n == &bg_name) {
+                        let reg = server::sessions_registry();
+                        let mut list = reg.lock().await;
+                        list.retain(|(n, _): &(String, u16)| n != &bg_name);
+                    }
+                }
+                Err(e) => log::warn!("add_account {bg_name}: background launch failed: {e:#}"),
+            }
+        });
     }
 
     Ok(serde_json::json!({
@@ -326,7 +344,7 @@ async fn add_account_impl(name: String, ctx: State<'_, AppCtx>) -> Result<serde_
         "name": name,
         "port": port,
         "connected": port.is_some(),
-        "warning": warning,
+        "warning": None::<String>,
     }))
 }
 
@@ -395,6 +413,53 @@ async fn rename_account_impl(
     Ok(serde_json::json!({ "ok": true, "name": new_name }))
 }
 
+/// force-close every chrome instance whose command line points at this
+/// account's user-data-dir. removal intent implies closing the browser:
+/// windows would otherwise lock the profile dir and the delete would fail
+/// with a retry-chasing error.
+#[cfg(windows)]
+fn kill_account_chrome(accounts_dir: &std::path::Path, name: &str) {
+    // name is validated to [A-Za-z0-9_-], so no -like wildcard escaping
+    let pattern = format!("*{}\\{}*", accounts_dir.display(), name);
+    let script = format!(
+        "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object {{ $_.CommandLine -like '{}' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
+        pattern
+    );
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let _ = cmd.output();
+}
+
+#[cfg(not(windows))]
+fn kill_account_chrome(_accounts_dir: &std::path::Path, _name: &str) {}
+
+/// remove a profile dir, tolerating brief post-kill file-lock release lag
+fn remove_profile_dir(profile_dir: &std::path::Path) -> Result<(), String> {
+    for attempt in 0..5 {
+        if !profile_dir.exists() {
+            return Ok(());
+        }
+        match std::fs::remove_dir_all(profile_dir) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                if attempt == 4 {
+                    return Err(format!(
+                        "removing account profile failed: {e}; close the account browser and retry"
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200 * (attempt + 1)));
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn remove_account_impl(
     name: String,
     delete_profile: Option<bool>,
@@ -407,11 +472,8 @@ async fn remove_account_impl(
     if delete_profile.unwrap_or(true) {
         let profile_dir = ctx.account_service.account_dir(&name);
         if profile_dir.exists() {
-            std::fs::remove_dir_all(&profile_dir).map_err(|e| {
-                format!(
-                    "removing account profile failed: {e}; close the account browser and retry"
-                )
-            })?;
+            kill_account_chrome(&ctx.paths.accounts, &name);
+            remove_profile_dir(&profile_dir)?;
         }
     }
     remove_desktop_profile_shortcut(&name);
@@ -437,9 +499,9 @@ async fn remove_all_accounts_impl(delete_profiles: Option<bool>, ctx: State<'_, 
         for name in &names {
             let profile_dir = ctx.account_service.account_dir(name);
             if profile_dir.exists() {
-                std::fs::remove_dir_all(&profile_dir).map_err(|e| {
-                    format!("removing account profile '{name}' failed: {e}; close its browser and retry")
-                })?;
+                kill_account_chrome(&ctx.paths.accounts, name);
+                remove_profile_dir(&profile_dir)
+                    .map_err(|e| format!("removing account profile '{name}' failed: {e}"))?;
             }
         }
     }

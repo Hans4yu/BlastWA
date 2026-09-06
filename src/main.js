@@ -381,6 +381,46 @@ function esc(s) {
 
 // shared helpers usable by pages
 const legacyHelpers = { stampName, esc };
+
+// in-page replacement for window.confirm. the dialog plugin shims confirm
+// into an async invoke of `plugin:dialog|confirm`, a command that no longer
+// exists on its rust side (only open/save/message are registered), so every
+// shimmed confirm rejects and guarded actions silently no-op. this overlay
+// uses the same modal styling as the add-account dialog and resolves a
+// boolean, so `await uiConfirm(...)` behaves like confirm() should.
+window.uiConfirm = function (message, opts = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML =
+      '<div class="modal-panel">' +
+        '<div class="panel-header"><span>' + (opts.title || 'Confirm') + '</span></div>' +
+        '<div class="modal-body"><p id="ui-confirm-text" style="margin:0"></p></div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" id="ui-confirm-cancel">Cancel</button>' +
+          '<button class="btn" id="ui-confirm-ok">OK</button>' +
+        '</div>' +
+      '</div>';
+    overlay.querySelector('#ui-confirm-text').textContent = message;
+    document.body.appendChild(overlay);
+
+    const done = (value) => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (ev) => {
+      if (ev.key === 'Escape') done(false);
+      if (ev.key === 'Enter') done(true);
+    };
+    overlay.querySelector('#ui-confirm-ok').onclick = () => done(true);
+    overlay.querySelector('#ui-confirm-cancel').onclick = () => done(false);
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) done(false); });
+    document.addEventListener('keydown', onKey);
+    overlay.querySelector('#ui-confirm-ok').focus();
+  });
+};
+
 window.blastwa = { ...legacyHelpers,
   invoke,
   invokeCommand,

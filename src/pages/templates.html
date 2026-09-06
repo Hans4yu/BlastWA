@@ -112,7 +112,7 @@
         if (btn.dataset.act === 'load') loadToComposer(tpl);
         else if (btn.dataset.act === 'edit') openEditTpl(tpl);
         else if (btn.dataset.act === 'del') {
-          if (!(await confirm(`Delete template "${tpl.name}"?`))) return;
+          if (!(await window.uiConfirm(`Delete template "${tpl.name}"?`, { title: 'Delete Template' }))) return;
           try {
             await invoke('delete_template', { id: tpl.id });
             await refresh();

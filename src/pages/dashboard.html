@@ -156,12 +156,17 @@
 
   async function removeAccounts(names) {
     if (removeBusy || !names.length) return;
-    // tauri's dialog plugin shims window.confirm into an async fn returning
-    // a Promise; without await the guard is always truthy and removal runs
-    // before the user answers
-    if (!(await confirm('Remove ' + names.length + ' account' + (names.length === 1 ? '' : 's') + ' and delete profile data?'))) return;
+    // busy must cover the confirm itself: a double-click would otherwise
+    // stack multiple overlays and fire multiple removals
     removeBusy = true;
     updateSelectionState();
+    // window.confirm is dead in the dialog-plugin shim (ACL rejects the
+    // removed `confirm` command); uiConfirm is the in-page replacement
+    if (!(await window.uiConfirm('Remove ' + names.length + ' account' + (names.length === 1 ? '' : 's') + ' and delete profile data?', { title: 'Remove Accounts' }))) {
+      removeBusy = false;
+      updateSelectionState();
+      return;
+    }
     try {
       for (var i = 0; i < names.length; i += 1) {
         await window.blastwa.invokeCommand('removeAccount', { name: names[i], deleteProfile: true });
@@ -206,45 +211,48 @@
 
   window.addAccount = async function () {
     if (addModalBusy) return;
-    addModalBusy = true;
-    document.getElementById('btn-add-confirm').disabled = true;
     var input = document.getElementById('new-account-name');
+    var confirmBtn = document.getElementById('btn-add-confirm');
+    var cancelBtn = document.getElementById('btn-add-cancel');
     var name = input.value.trim();
     if (!name) {
       showAddError('Account name is required.');
       input.focus();
-      addModalBusy = false;
-      document.getElementById('btn-add-confirm').disabled = false;
       return;
     }
     if (name.length > 64) {
       showAddError('Account name is too long (max 64 characters).');
-      addModalBusy = false;
-      document.getElementById('btn-add-confirm').disabled = false;
       return;
     }
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
       showAddError('Only letters, numbers, underscore and dash are allowed.');
-      addModalBusy = false;
-      document.getElementById('btn-add-confirm').disabled = false;
       return;
     }
+    // lock the modal while the IPC runs so double-Enter and double-click
+    // cannot stack requests; the add itself returns in milliseconds
+    // (chrome launch happens in the background on the rust side)
+    addModalBusy = true;
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    input.disabled = true;
+    confirmBtn.textContent = 'Adding...';
+    showAddError('');
     try {
       var existing = await window.blastwa.getAccounts();
       if (existing.some(function (a) { return a.name === name; })) {
         showAddError('An account named ' + name + ' already exists.');
         return;
       }
-      const res = await window.blastwa.invokeCommand('addAccount', { name: name });
+      await window.blastwa.invokeCommand('addAccount', { name: name });
       closeAddModal();
-      // account is saved either way; surface session warnings honestly
-      if (res && res.warning) alert(res.warning);
     } catch (e) {
       showAddError('Failed to add account: ' + formatError(e));
     } finally {
       addModalBusy = false;
-      var confirmBtn = document.getElementById('btn-add-confirm');
-      if (confirmBtn) confirmBtn.disabled = false;
+      confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
+      input.disabled = false;
+      confirmBtn.textContent = 'Add';
     }
     await renderAccounts();
   };
@@ -259,9 +267,13 @@
     document.getElementById('btn-remove-all').onclick = async function () {
       var names = Array.from(document.querySelectorAll('.account-select')).map(function (el) { return el.dataset.account; });
       if (removeBusy || !names.length) return;
-      if (!(await confirm('Remove all ' + names.length + ' accounts and delete profile data?'))) return;
       removeBusy = true;
       updateSelectionState();
+      if (!(await window.uiConfirm('Remove all ' + names.length + ' accounts and delete profile data?', { title: 'Remove All' }))) {
+        removeBusy = false;
+        updateSelectionState();
+        return;
+      }
       try {
         await window.blastwa.invokeCommand('removeAllAccounts', { deleteProfiles: true });
         await renderAccounts();
