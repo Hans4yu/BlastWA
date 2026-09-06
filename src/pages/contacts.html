@@ -440,6 +440,7 @@
     var wrap = document.getElementById('contacts-table-wrap');
     if (!slider || !label || !wrap) return;
     var n = Number(slider.value) || 15;
+    label.textContent = n;
     var row = wrap.querySelector('#contacts-body tr');
     var rowH = row ? row.offsetHeight : 29; // measured, with a sane fallback
     var headH = wrap.querySelector('thead tr') ? wrap.querySelector('thead tr').offsetHeight : 29;
