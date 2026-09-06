@@ -15,23 +15,19 @@
     <span class="panel-menu">&#9776;</span>
   </div>
   <div class="panel-body">
-    <div class="flex-between">
-      <div class="row">
-        <button class="btn" onclick="pickAndImport()">Import .txt / .csv / .xlsx</button>
-        <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
-          style="display:none" onchange="handleImport(this)" />
-        <button class="btn" id="btn-import-wa">Import from WhatsApp phonebook</button>
-        <select id="wa-account" style="width:170px"><option value="">No linked accounts</option></select>
-        <button class="btn btn-danger" id="btn-del-selected" disabled>Delete Selected</button>
-        <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
-      </div>
-      <span style="font-size:11px;color:var(--text-dim)">
-        <b>Click row</b> = select &middot; <b>Ctrl+click</b> = toggle scattered rows &middot;
-        <b>Shift+click</b> = select a block from the last row
-      </span>
-      <span style="font-size:11px;color:var(--text-dim)">
-        .txt format: <span class="mono">number|fullname|var1|var2|var3|var4|var5</span> (one per line, extra columns optional)
-      </span>
+    <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn" onclick="pickAndImport()">Import .txt / .csv / .xlsx</button>
+      <input type="file" id="import-file" accept=".txt,.csv,.xlsx,.xls"
+        style="display:none" onchange="handleImport(this)" />
+      <button class="btn" id="btn-import-wa">Import from WhatsApp phonebook</button>
+      <select id="wa-account" style="width:170px" title="WhatsApp account to import the phonebook from"><option value="">No linked accounts</option></select>
+      <span style="flex:1"></span>
+      <button class="btn btn-danger" id="btn-del-selected" disabled>Delete Selected</button>
+      <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
+    </div>
+    <div class="row" style="gap:16px;margin:0;flex-wrap:wrap;font-size:11px;color:var(--text-dim)">
+      <span><b>Click</b> = select &middot; <b>Ctrl+click</b> = toggle scattered rows &middot; <b>Shift+click</b> = select a block</span>
+      <span>.txt format: <span class="mono">number|fullname|var1|var2|var3|var4|var5</span> &mdash; one per line, extra columns optional</span>
     </div>
   </div>
 </div>
