@@ -165,6 +165,7 @@ fn main() {
             commands::campaigns::get_status,
             commands::contacts::get_contacts,
             commands::contacts::clear_contacts,
+            commands::contacts::remove_contacts,
             commands::contacts::import_contacts,
             commands::contacts::check_numbers_cmd,
             commands::contacts::keep_contacts_only,

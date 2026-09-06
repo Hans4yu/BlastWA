@@ -29,6 +29,21 @@ pub(crate) fn clear_contacts(ctx: State<'_, AppCtx>) -> Result<serde_json::Value
     Ok(serde_json::json!({ "ok": true }))
 }
 
+/// remove specific numbers from the send list — backs the contact table's
+/// shift/ctrl-click "Delete Selected" flow
+#[tauri::command]
+pub(crate) fn remove_contacts(
+    numbers: Vec<String>,
+    ctx: State<'_, AppCtx>,
+) -> Result<serde_json::Value, String> {
+    let kill: std::collections::HashSet<&String> = numbers.iter().collect();
+    let mut list = ctx.contacts.lock().unwrap();
+    let before = list.len();
+    list.contacts.retain(|c| !kill.contains(&c.number));
+    let removed = before - list.len();
+    Ok(serde_json::json!({ "ok": true, "removed": removed }))
+}
+
 #[tauri::command]
 pub(crate) fn import_contacts(
     path: String,

@@ -22,8 +22,13 @@
           style="display:none" onchange="handleImport(this)" />
         <button class="btn" id="btn-import-wa">Import from WhatsApp phonebook</button>
         <select id="wa-account" style="width:170px"><option value="">No linked accounts</option></select>
+        <button class="btn btn-danger" id="btn-del-selected" disabled>Delete Selected</button>
         <button class="btn btn-danger" onclick="clearAll()">Clear List</button>
       </div>
+      <span style="font-size:11px;color:var(--text-dim)">
+        <b>Click row</b> = select &middot; <b>Ctrl+click</b> = toggle scattered rows &middot;
+        <b>Shift+click</b> = select a block from the last row
+      </span>
       <span style="font-size:11px;color:var(--text-dim)">
         .txt format: <span class="mono">number|fullname|var1|var2|var3|var4|var5</span> (one per line, extra columns optional)
       </span>
@@ -41,6 +46,7 @@
       <table>
         <thead>
           <tr>
+            <th style="width:30px"><input type="checkbox" id="contacts-select-all" aria-label="Select all contacts" /></th>
             <th style="width:30px">#</th>
             <th>Number</th><th>Full Name</th>
             <th>Var1</th><th>Var2</th><th>Var3</th><th>Var4</th><th>Var5</th>
@@ -488,14 +494,95 @@
     document.getElementById('total-count').textContent = list.length;
     document.getElementById('contacts-empty').style.display = list.length ? 'none' : '';
     document.getElementById('contacts-body').innerHTML = list.map((c, i) => `
-      <tr>
+      <tr data-number="${esc(c.number)}" aria-selected="false">
+        <td><input type="checkbox" class="contact-select" data-number="${esc(c.number)}" aria-label="Select ${esc(c.number)}" /></td>
         <td>${i + 1}</td>
         <td class="mono">${esc(c.number)}</td>
         <td>${esc(c.fullname)}</td>
         <td>${esc(c.var1)}</td><td>${esc(c.var2)}</td><td>${esc(c.var3)}</td>
         <td>${esc(c.var4)}</td><td>${esc(c.var5)}</td>
       </tr>`).join('');
+    syncSelectAllBox();
+    updateDeleteSelectedUi();
   }
+
+  // --- contact row selection: click = toggle, ctrl/cmd+click = toggle
+  // scattered rows, shift+click = block-select from the anchor row
+  // (gmail pattern). the checkbox stays the source of truth so keyboard
+  // and screen-reader users keep their normal semantics.
+  var selAnchor = -1;
+
+  function syncSelectAllBox() {
+    const boxes = [...document.querySelectorAll('#contacts-body .contact-select')];
+    const selAll = document.getElementById('contacts-select-all');
+    if (selAll) selAll.checked = boxes.length > 0 && boxes.every((b) => b.checked);
+  }
+
+  function updateDeleteSelectedUi() {
+    const boxes = [...document.querySelectorAll('#contacts-body .contact-select')];
+    const checked = boxes.filter((b) => b.checked).length;
+    document.querySelectorAll('#contacts-body tr').forEach((tr) => {
+      const cb = tr.querySelector('.contact-select');
+      tr.setAttribute('aria-selected', cb && cb.checked ? 'true' : 'false');
+    });
+    const btn = document.getElementById('btn-del-selected');
+    if (btn) {
+      btn.disabled = checked === 0;
+      btn.textContent = checked ? `Delete Selected (${checked})` : 'Delete Selected';
+    }
+  }
+
+  function setRowChecked(tr, state) {
+    const cb = tr.querySelector('.contact-select');
+    if (cb) cb.checked = state;
+  }
+
+  document.getElementById('contacts-body').addEventListener('click', (ev) => {
+    const tr = ev.target.closest('tr');
+    if (!tr || !tr.parentElement || tr.parentElement.id !== 'contacts-body') return;
+    const rows = [...document.querySelectorAll('#contacts-body tr')];
+    const idx = rows.indexOf(tr);
+
+    if (ev.shiftKey && selAnchor >= 0 && selAnchor < rows.length) {
+      // block from the anchor to this row, inclusive, in the anchor's state
+      const [a, b] = [Math.min(selAnchor, idx), Math.max(selAnchor, idx)];
+      const anchorBox = rows[selAnchor].querySelector('.contact-select');
+      const state = anchorBox ? anchorBox.checked : true;
+      for (let i = a; i <= b; i += 1) setRowChecked(rows[i], state);
+      ev.preventDefault(); // keep shift-click from selecting text
+    } else if (ev.target.classList && ev.target.classList.contains('contact-select')) {
+      // the checkbox toggled natively; just record the new anchor
+      selAnchor = idx;
+    } else {
+      // row click (with or without ctrl/cmd): toggle that one row
+      const cb = tr.querySelector('.contact-select');
+      if (cb) cb.checked = !cb.checked;
+      selAnchor = idx;
+    }
+    syncSelectAllBox();
+    updateDeleteSelectedUi();
+  });
+
+  document.getElementById('contacts-select-all').addEventListener('change', (ev) => {
+    document.querySelectorAll('#contacts-body .contact-select').forEach((cb) => {
+      cb.checked = ev.target.checked;
+    });
+    updateDeleteSelectedUi();
+  });
+
+  document.getElementById('btn-del-selected').addEventListener('click', async () => {
+    const numbers = [...document.querySelectorAll('#contacts-body .contact-select:checked')]
+      .map((el) => el.dataset.number);
+    if (!numbers.length) return;
+    if (!(await window.uiConfirm('Remove ' + numbers.length + ' contact' + (numbers.length === 1 ? '' : 's') + ' from the list?', { title: 'Delete Selected' }))) return;
+    const { invoke } = window.blastwa;
+    try {
+      await invoke('remove_contacts', { numbers });
+      await refresh();
+    } catch (e) {
+      alert('Delete failed: ' + (e && e.message ? e.message : e));
+    }
+  });
 
   async function importFromPath(path, removeDupes) {
     const { invoke } = window.blastwa;
