@@ -53,8 +53,12 @@ node scripts/check_sending_page.js                    # PASSED
 
 ## Exact Next Move
 
-**Uninstaller regression (user-reported, 2026-09-06): found and FIXED (commit 7a6ed04).** The uninstall dialog claimed success while leaving `blastwa.exe`, `uninstall.exe`, and `%APPDATA%\BlastWA` behind. Root causes: no taskkill of a running app; the detached self-cleanup used `timeout /t 2` (exits instantly without a console → rmdir fired while the uninstaller's own MessageBox still held locks); the cleanup cmd inherited the install dir as CWD; and an inline `if ... exit & ping` one-liner parsed as a single conditional, skipping the delay. The sweeper is now a generated temp batch file with ping-based retry (~2 min) that removes the install dir + appdata after the uninstaller exits and deletes itself. Verified end-to-end on the real install: after OK, install dir, appdata, HKCU key, and shortcuts are all gone. Environmental note: local security policy blocks shell-spawned executables named `uninstall.exe` (Explorer double-click unaffected) — the logic is name-independent via `--uninstall`.
+**Uninstall wizard shipped (2026-09-06, commit f0d396e).** The uninstall flow is now a full wizard in the same native shell as the installer: Welcome → Options → progress → Done. Options carries "Also delete account data (WhatsApp sessions, profiles)", **unchecked by default** (kept unless ticked — reinstall then needs no QR re-scan). Removal steps run on a worker thread with live step text; closing mid-uninstall still triggers the self-cleanup sweeper. Verified live: both checkbox paths, sweeper self-cleanup, window-close guarantee.
 
-The machine is currently fully de-installed. To install the fixed build: `D:\Tes\blastwa\target\release\setup.exe`.
+**No more surprise UAC:** rustc's default embedded manifest is an empty `<assembly>`, so Windows installer detection auto-elevated every exe named `*setup*`/`*install*`/`*uninstall*`. `setup/app.manifest` (embedded verbatim via `/MANIFESTINPUT`, `requestedExecutionLevel=asInvoker`) defeats the heuristic — verified: an uninstall.exe-named binary now launches non-elevated. Note: `/MANIFESTUAC:"..."` inline quoting produced a broken side-by-side manifest; always use the manifest-file approach.
+
+Deployed artifacts: `target/release/setup.exe` (installer + uninstall wizard) — the machine is currently fully de-installed; install with `D:\Tes\blastwa\target\release\setup.exe`.
+
+Two elevated stray windows from pre-fix testing (uninstall-helper / old uninstall.exe) may still sit on the desktop — close them via their Cancel button (elevated processes cannot be killed from a non-admin shell).
 
 Still needs a live phone: QR scan → Online badge transition, real message send, autoreply against a live session.
