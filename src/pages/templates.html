@@ -101,11 +101,20 @@
 
   // "load to composer" is a frontend concern: the sending page restores its
   // state from this same localStorage draft on init, so writing the draft is
-  // all it takes. there is no rust command for it.
-  function loadToComposer(tpl) {
+  // all it takes. there is no rust command for it. a draft body that would
+  // be overwritten gets a confirm first — losing in-progress composing to a
+  // single misclick is not acceptable
+  async function loadToComposer(tpl) {
     const DRAFT_KEY = 'blastwa.draft.sending';
     let d = {};
     try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}') || {}; } catch (e) { d = {}; }
+    const current = typeof d['msg-body'] === 'string' ? d['msg-body'].trim() : '';
+    if (current && current !== String(tpl.body || '').trim()) {
+      const ok = await window.uiConfirm(
+        'Replace your current compose draft with the body of "' + tpl.name + '"?',
+        { title: 'Load to Composer' });
+      if (!ok) return;
+    }
     d['msg-body'] = tpl.body || '';
     if (tpl.attachment_path) d.attachmentPath = tpl.attachment_path;
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}

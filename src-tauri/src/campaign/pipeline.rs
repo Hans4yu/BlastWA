@@ -9,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::api::server::{AppState, BlastRequest};
-use crate::browser::cdp_client::{find_free_port, SessionManager};
+use crate::browser::cdp_client::SessionManager;
 use crate::browser::js_injector::JsInjector;
 use crate::campaign::contact_list::{normalize_number, ContactList};
 use crate::campaign::sender::{run_campaign, CampaignConfig};
@@ -105,7 +105,9 @@ impl Pipeline {
         let gate = self.launch_lock(account).await;
         let _launching = gate.lock().await;
 
-        // another caller may have finished the launch while we queued
+        // another caller may have finished the launch while we queued.
+        // strict on purpose (vs attach's is_ok): a blast needs a logged-in
+        // page — a cached logged-out page is stale and must be relaunched
         if let Some(page) = self.cached_page(account).await {
             if JsInjector::new(&page).is_logged_in().await.unwrap_or(false) {
                 return Ok(page);
@@ -113,10 +115,14 @@ impl Pipeline {
             self.pages.lock().await.remove(account);
         }
 
-        let port = find_free_port(9222).await;
+        let (port, port_guard) = crate::browser::cdp_client::find_free_port_held(9222)
+            .await
+            .ok_or_else(|| {
+                anyhow::anyhow!("no free cdp port in 9222-9322 — close an account chrome window first")
+            })?;
         let session = self
             .sessions
-            .launch(account, port)
+            .launch(account, port, Some(port_guard))
             .await
             .with_context(|| format!("launching chrome for account {account}"))?;
         let page = session.page.clone();
@@ -283,7 +289,11 @@ impl Pipeline {
     /// opens one, and stores the handle so status probes can observe it.
     pub async fn attach(&self, account: &str, port: u16) -> anyhow::Result<chromiumoxide::Page> {
         // same discipline as get_page: hold the map lock only for map access,
-        // serialize the connect+discovery work on the per-account gate
+        // serialize the connect+discovery work on the per-account gate.
+        // health check is `.is_ok()` ON PURPOSE (not unwrap_or(false)):
+        // attach opens an account window and must tolerate a logged-out
+        // page — treating it as dead would relaunch chrome on every click
+        // while a qr is pending. the strict variant lives in get_page.
         if let Some(page) = self.cached_page(account).await {
             if JsInjector::new(&page).is_logged_in().await.is_ok() {
                 return Ok(page);
@@ -351,10 +361,18 @@ impl Pipeline {
             return Ok(page);
         }
 
-        let page = browser
-            .new_page("https://web.whatsapp.com")
-            .await
-            .context("opening whatsapp web tab")?;
+        let page = match browser.new_page("https://web.whatsapp.com").await {
+            Ok(p) => p,
+            Err(e) => {
+                // nothing was cached for this account: without this cleanup
+                // the fresh connection's driver would hang orphaned until
+                // chrome died
+                if let Some(task) = self.attach_tasks.lock().await.remove(account) {
+                    task.abort();
+                }
+                return Err(anyhow::Error::new(e).context("opening whatsapp web tab"));
+            }
+        };
         self.pages.lock().await.insert(account.to_string(), page.clone());
         // fresh tab: previous wpp memo no longer applies
         self.wpp_ready.lock().await.remove(account);

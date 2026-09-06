@@ -109,11 +109,16 @@ async fn launch_session_resolved(
     }
 
     let owned = name.to_string();
-    let port = blastwa_core::browser::cdp_client::find_free_port(9222).await;
+    let (port, port_guard) =
+        blastwa_core::browser::cdp_client::find_free_port_held(9222)
+            .await
+            .ok_or_else(|| {
+                "no free cdp port in 9222-9322 — close an account chrome window first".to_string()
+            })?;
     register_live_session(name, port).await;
     let handle = tauri::async_runtime::spawn(async move {
         let sm = blastwa_core::browser::cdp_client::SessionManager::new(accounts_dir, chrome_path);
-        sm.launch(&owned, port).await.map(|_| port)
+        sm.launch(&owned, port, Some(port_guard)).await.map(|_| port)
     });
     let launch_result = handle.await.map_err(|e| e.to_string())?;
     match launch_result {

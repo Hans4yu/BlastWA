@@ -359,7 +359,7 @@
       // table from its index alone and drop every restored row
       checkRows = lastOutcomes.slice();
     }
-    const unlistenCheck = await listen('check_progress', (ev) => {
+    await listen('check_progress', (ev) => {
       if (!document.getElementById('check-body')) return;
       const p = ev.payload || ev;
       checkRows[p.checked - 1] = { number: p.number, exists: !!p.exists, kind: p.kind || '', error: p.error || undefined };

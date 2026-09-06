@@ -116,6 +116,7 @@
     // route() rebuilds this page on every navigation, which used to wipe
     // unsaved rows. every edit now schedules a debounced save, and the
     // router cleanup fires one last save when the user leaves the tab.
+    const NAV_DRAFT_KEY = 'blastwa.autoreply.navdraft';
     let dirty = false;
     let saveTimer = null;
 
@@ -166,8 +167,14 @@
       clearTimeout(saveTimer);
       if (!dirty) return;
       // fire-and-forget: the webview outlives the navigation, so the ipc
-      // still lands in rust even though this page's dom is gone
-      invoke('save_rules', { rules: collectRules() }).catch(() => {});
+      // still lands in rust even though this page's dom is gone. a failure
+      // is stashed in localStorage and recovered on the next visit — a
+      // silent drop here used to lose the last sub-second edits
+      invoke('save_rules', { rules: collectRules() })
+        .then(() => { try { localStorage.removeItem(NAV_DRAFT_KEY); } catch (e) {} })
+        .catch(() => {
+          try { localStorage.setItem(NAV_DRAFT_KEY, JSON.stringify(collectRules())); } catch (e) {}
+        });
     });
 
     $('btn-add-rule').addEventListener('click', () => {
@@ -236,9 +243,36 @@
       last.querySelector('.r-keyword').value = r.keyword || '';
       last.querySelector('.r-reply').value = r.reply_message || '';
     });
+    // recovery: a nav-time save that failed (app quit, transient ipc error)
+    // stashed the full table here — it is newer than the file, so it wins
+    let recovered = false;
+    {
+      let navDraft = null;
+      try { navDraft = JSON.parse(localStorage.getItem(NAV_DRAFT_KEY) || 'null'); } catch (e) {}
+      if (Array.isArray(navDraft) && navDraft.length) {
+        $('rules-body').innerHTML = '';
+        for (const r of navDraft) {
+          addRuleRow();
+          const last = $('rules-body').lastElementChild;
+          last.querySelector('.r-enabled').checked = r.enabled ?? true;
+          last.querySelector('.r-name').value = r.name || '';
+          last.querySelector('.r-match').value = matchTypeToUi(r.match_type);
+          last.querySelector('.r-keyword').value = r.keyword || '';
+          last.querySelector('.r-reply').value = r.reply_message || '';
+        }
+        localStorage.removeItem(NAV_DRAFT_KEY);
+        recovered = true;
+      }
+    }
     // restored rows start clean: no phantom "unsaved" flag from the load itself
     dirty = false;
     setStatus('');
+    if (recovered) {
+      // re-mark dirty AFTER the clean-reset above: the pending save must
+      // actually fire, and the recovery message must survive this init
+      setStatus('recovered unsaved changes from the previous session — saving…');
+      markDirty();
+    }
     refreshWatcher();
   };
 </script>

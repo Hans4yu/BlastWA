@@ -33,7 +33,16 @@ impl SessionManager {
 
     /// launch chrome with an isolated profile + cdp port, then attach.
     /// retries because chrome takes a moment to open the debug socket.
-    pub async fn launch(&self, name: &str, port: u16) -> Result<AccountSession> {
+    /// `port_guard` is a held bind of the chosen port: it is dropped right
+    /// after spawn so chrome can bind it, shrinking the find-free-port
+    /// race window (two simultaneous launches picking the same port) to
+    /// microseconds instead of the whole discovery-to-bind span.
+    pub async fn launch(
+        &self,
+        name: &str,
+        port: u16,
+        port_guard: Option<std::net::TcpListener>,
+    ) -> Result<AccountSession> {
         let user_data_dir = self.accounts_dir.join(name);
         std::fs::create_dir_all(&user_data_dir)?;
 
@@ -48,6 +57,8 @@ impl SessionManager {
             .arg("--disable-background-timer-throttling")
             .spawn()
             .context("spawning chrome")?;
+        // released microseconds after spawn: chrome owns the port from here
+        drop(port_guard);
 
         let mut last_err = None;
         // adaptive backoff: 500ms → 1000ms → 1500ms → 2000ms (cap), total
@@ -151,12 +162,23 @@ async fn has_whatsapp_target(port: u16) -> bool {
 }
 
 /// find a free tcp port starting from `start`
-pub async fn find_free_port(start: u16) -> u16 {
-    for p in start..start + 100 {
-        if std::net::TcpListener::bind(("127.0.0.1", p)).is_ok() {
-            return p;
+/// like the old `find_free_port`, but the caller receives the bound
+/// listener and must drop it just before the port is actually claimed —
+/// see [`SessionManager::launch`]. holding the bind closes the same-instance
+/// race where two callers probe the same "free" port back to back.
+/// `None` = every port in the range is taken.
+pub async fn find_free_port_held(start: u16) -> Option<(u16, std::net::TcpListener)> {
+    let last = start.saturating_add(100);
+    let mut port = start;
+    loop {
+        match std::net::TcpListener::bind(("127.0.0.1", port)) {
+            Ok(listener) => return Some((port, listener)),
+            Err(_) => {
+                if port >= last {
+                    return None;
+                }
+                port += 1;
+            }
         }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
-    start
 }

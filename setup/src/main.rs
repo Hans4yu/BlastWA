@@ -167,6 +167,12 @@ unsafe fn spawn_uninstall_sweeper(delete_data: bool) {
             "  rmdir /s /q \"{}\" >nul 2>&1\r\n",
             app_data_dir().to_string_lossy().replace('"', "")
         ));
+        // the default instance's webview storage sits under the tauri
+        // identifier in %LOCALAPPDATA%; retry it here while files unlock
+        let target = format!("{}\\{}", local_app_data_str(), WEBVIEW_DATA_DIR);
+        lines.push_str(&format!(
+            "  if exist \"{target}\" rmdir /s /q \"{target}\" >nul 2>&1\r\n"
+        ));
     }
     lines.push_str(&format!(
         "  rmdir /s /q \"{}\" >nul 2>&1\r\n  if not exist \"{}\" del \"%~f0\" >nul 2>&1\r\n  if not exist \"{}\" exit\r\n  ping -n 2 127.0.0.1 >nul\r\n)\r\ndel \"%~f0\" >nul 2>&1\r\n",
@@ -221,6 +227,13 @@ unsafe fn run_uninstall_steps() {
     let mut data_gone = true;
     if !keep_data {
         data_gone = remove_dir_with_retry(&data_dir, 10);
+        // the default instance's webview storage (localStorage: caches and
+        // compose drafts) lives outside the data dir, under the tauri
+        // identifier; profiles keep theirs inside profiles/<name>/webview,
+        // which the data-dir sweep already covers
+        if let Some(local) = dirs_localappdata() {
+            let _ = std::fs::remove_dir_all(local.join(WEBVIEW_DATA_DIR));
+        }
     }
 
     set_uninstall_step_text("Removing program files...");
@@ -325,6 +338,16 @@ fn default_install_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("Programs")
         .join(APP_NAME)
+}
+
+/// the default instance's webview storage folder name under
+/// %LOCALAPPDATA% — must match the identifier in tauri.conf.json
+const WEBVIEW_DATA_DIR: &str = "com.blastwa.app";
+
+fn local_app_data_str() -> String {
+    dirs_localappdata()
+        .map(|p| p.to_string_lossy().trim_end_matches('\\').to_string())
+        .unwrap_or_default()
 }
 
 fn app_data_dir() -> PathBuf {

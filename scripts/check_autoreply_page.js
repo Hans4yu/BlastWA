@@ -133,6 +133,14 @@ function makeEl(tag, classes = []) {
 
 let cleanups = [];
 let timers = [];
+// one storage for the whole run: nav-save recovery drafts must survive
+// across navigations exactly like the real app's single webview document
+const storage = new Map();
+const localStorageStub = {
+  getItem: (k) => (storage.has(k) ? storage.get(k) : null),
+  setItem: (k, v) => storage.set(k, String(v)),
+  removeItem: (k) => storage.delete(k),
+};
 
 async function navigate(state) {
   for (const fn of cleanups.splice(0)) {
@@ -150,6 +158,7 @@ async function navigate(state) {
   };
   const saveCalls = [];
   const win = {
+    localStorage: localStorageStub,
     document: {
       getElementById: $,
       createElement: (t) => makeEl(t),
@@ -176,6 +185,7 @@ async function navigate(state) {
         if (cmd === 'load_rules') return state.savedRules || [];
         if (cmd === 'save_rules') {
           saveCalls.push(args.rules);
+          if (state.saveFails) throw new Error('ipc down');
           return { ok: true, saved: args.rules.length, skipped: 0 };
         }
         if (cmd === 'autoreply_status') return state.status ||
@@ -296,6 +306,32 @@ function fillRow(row, { keyword, reply }) {
   });
   assert('s6 idle state points at the Dashboard when rules are armed but no session runs — or the neutral add-a-rule copy',
     /Dashboard|Add a rule/.test(g.$('watch-status').innerHTML));
+
+  // --- s10: a failed navigation-save is recovered on the next visit ---
+  const recState = { alerts: [], saveFails: true };
+  const q1 = await navigate(recState);
+  q1.$('btn-add-rule')._h.click();
+  fillRow(q1.$('rules-body').children[0], { keyword: 'recover', reply: 'yes' });
+  q1.$('rules-body')._h.input({ target: q1.$('rules-body').children[0].querySelector('.r-keyword') });
+  for (const fn of cleanups.splice(0)) fn(); // nav-save fires and fails -> stash
+  await new Promise((r) => setTimeout(r, 10));
+  assert('s10 failed nav-save stashed the recovery draft',
+    !!storage.get('blastwa.autoreply.navdraft'));
+  recState.saveFails = false;
+  const q2 = await navigate(recState); // init recovers the stashed rows
+  await new Promise((r) => setTimeout(r, 10));
+  assert('s10 recovery rendered the stashed row',
+    q2.$('rules-body').children.length === 1 &&
+    q2.$('rules-body').children[0].querySelector('.r-keyword').value === 'recover');
+  assert('s10 recovery keeps the page dirty and the message visible',
+    /recovered unsaved changes|saving/.test(q2.$('rules-status').textContent) ||
+    /saving/.test(q2.$('rules-status').textContent),
+    JSON.stringify(q2.$('rules-status').textContent));
+  await q2.flushTimers(); // markDirty debounce from the recovery
+  assert('s10 recovered rules re-persisted after recovery save',
+    q2.saveCalls.some((c) => c.length === 1 && c[0].keyword === 'recover'));
+  assert('s10 recovery draft cleared after a successful save',
+    !storage.get('blastwa.autoreply.navdraft'));
 
   console.log('');
   console.log(failures ? `${failures} FAILURES` : 'ALL AUTOREPLY PAGE CHECKS PASSED');

@@ -16,6 +16,11 @@ Complete the command-modularization refactor (Priority 2 of the 2026-09-05 hando
 - `combine_launch_and_discovery` (deleted in abdb7a5, tests orphaned) restored inside `commands/accounts.rs` and wired into `launch_session`'s failure path; the bin tests compile and pass again.
 - `AppError` deduplicated in `src-tauri/src/error.rs` (exported via `lib.rs`).
 
+### This pass (2026-09-06, closing 3): Low-severity audit fixes + review findings — audit fully closed
+- **Code-review findings fixed** (report-only pass caught these before commit): the uninstall sweeper's retry line lost its path separator (`Localcom.blastwa.app` — retry was inert; now `format!("{local}\{WEBVIEW_DATA_DIR}")`), and the autoreply nav-save recovery had its `markDirty()`/status immediately wiped by the trailing clean-reset (recovery message invisible; persistence hung on an implicit coupling). Recovery now re-marks dirty after the clean-reset, pinned by new harness scenario s10 (stash → recover → re-save → draft cleared).
+- **Lows cleared:** `find_free_port_held` returns `Option` (the old exhausted-range fallback held an ephemeral bind while reporting the busy start port); the dead `find_free_port` function + import removed; the unused `unlistenCheck` binding dropped; `attach()` aborts and untracks the fresh connection driver when tab-open fails (no orphaned socket); Settings API panel documents "webhook blast sends plain text only"; the attach-vs-get_page health-check split (`is_ok()` vs `unwrap_or(false)`) is documented as intentional (attach tolerates QR-pending sessions, get_page must be strict).
+- Both binaries rebuilt: `target/release/blastwa.exe` (deployed + running) and `target/release/setup.exe`.
+
 ### This pass (2026-09-06, closing 2): Medium-severity audit fixes — matrix cleared
 All five Medium findings from the audit are fixed:
 - **Import replace gate** (`contacts.html`): importing over a non-empty list now requires an explicit confirm naming the count and the file; cancel leaves the list untouched. Live-verified cancel/ok/restore paths.
