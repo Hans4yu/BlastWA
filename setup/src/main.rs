@@ -58,6 +58,207 @@ static mut OPT_DESKTOP: bool = true;
 static mut OPT_STARTMENU: bool = true;
 static mut OPT_LAUNCH: bool = true;
 
+// ---------- uninstall wizard ----------
+// same window shell as the installer; UNINSTALL_MODE switches the page flow
+
+#[derive(Clone, Copy, PartialEq)]
+enum UninstallStep {
+    Welcome,
+    Options,
+    Working,
+    Done,
+}
+
+const IDC_CHK_DATA: isize = 1010;
+const IDC_STEP_LABEL: isize = 1011;
+
+static mut UNINSTALL_MODE: bool = false;
+static mut UNINSTALL_STEP: UninstallStep = UninstallStep::Welcome;
+static mut UNINSTALL_KEEP_DATA: bool = true;
+static mut UNINSTALL_DIR: Option<PathBuf> = None;
+static mut SWEEPER_SPAWNED: bool = false;
+static mut HWND_CHK_DATA: HWND = 0;
+static mut HWND_STEP_LABEL: HWND = 0;
+
+/// clone the stored dir through a raw pointer so the shared-reference
+/// lint (static_mut_refs) stays quiet; single-threaded GUI app
+unsafe fn uninstall_dir_snapshot() -> Option<PathBuf> {
+    (*std::ptr::addr_of!(UNINSTALL_DIR)).clone()
+}
+
+fn resolve_uninstall_dir() -> PathBuf {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let uninstall_path = format!(r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", APP_NAME);
+    hkcu.open_subkey(&uninstall_path)
+        .ok()
+        .and_then(|key| key.get_value::<String, _>("InstallLocation").ok())
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_exe().ok().and_then(|path| path.parent().map(Path::to_path_buf)))
+        .unwrap_or_else(default_install_dir)
+}
+
+fn kill_running_app() {
+    let mut kill = Command::new("taskkill");
+    kill.args(["/F", "/IM", "blastwa.exe"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        kill.creation_flags(CREATE_NO_WINDOW);
+    }
+    let _ = kill.spawn();
+}
+
+fn remove_profile_shortcuts() {
+    if let Some(desktop) = dirs::desktop_dir() {
+        let _ = std::fs::remove_file(desktop.join("BlastWA.lnk"));
+        if let Ok(entries) = std::fs::read_dir(&desktop) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let is_profile_shortcut = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.starts_with("BlastWA - ") && name.ends_with(".lnk"))
+                    .unwrap_or(false);
+                if is_profile_shortcut {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+    }
+
+    if let Some(data_dir) = dirs_localappdata() {
+        let start_menu = data_dir
+            .join("..")
+            .join("Roaming")
+            .join("Microsoft")
+            .join("Windows")
+            .join("Start Menu")
+            .join("Programs");
+        let _ = std::fs::remove_file(start_menu.join("BlastWA.lnk"));
+    }
+}
+
+fn remove_dir_with_retry(path: &Path, attempts: u32) -> bool {
+    for _ in 0..attempts {
+        if !path.exists() {
+            return true;
+        }
+        if std::fs::remove_dir_all(path).is_ok() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    !path.exists()
+}
+
+/// write the detached sweeper that removes the install dir after this
+/// process exits (the running uninstaller locks its own exe). optionally
+/// also retries the data dir when a live chrome profile kept it locked.
+/// must be spawned with its working directory OUTSIDE the removed tree.
+unsafe fn spawn_uninstall_sweeper(delete_data: bool) {
+    if SWEEPER_SPAWNED {
+        return;
+    }
+    let install_dir = unsafe { uninstall_dir_snapshot().unwrap_or_else(resolve_uninstall_dir) };
+    let mut lines = String::from("@echo off\r\nfor /l %%i in (1,1,120) do (\r\n");
+    if delete_data {
+        lines.push_str(&format!(
+            "  rmdir /s /q \"{}\" >nul 2>&1\r\n",
+            app_data_dir().to_string_lossy().replace('"', "")
+        ));
+    }
+    lines.push_str(&format!(
+        "  rmdir /s /q \"{}\" >nul 2>&1\r\n  if not exist \"{}\" del \"%~f0\" >nul 2>&1\r\n  if not exist \"{}\" exit\r\n  ping -n 2 127.0.0.1 >nul\r\n)\r\ndel \"%~f0\" >nul 2>&1\r\n",
+        install_dir.to_string_lossy().replace('"', ""),
+        install_dir.to_string_lossy().replace('"', ""),
+        install_dir.to_string_lossy().replace('"', ""),
+    ));
+    let sweeper = std::env::temp_dir().join("blastwa_uninstall_sweeper.cmd");
+    if std::fs::write(&sweeper, lines).is_ok() {
+        let mut cleanup = Command::new("cmd.exe");
+        cleanup.args(["/C", &sweeper.to_string_lossy()]);
+        cleanup.current_dir(std::env::temp_dir());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cleanup.creation_flags(0x0800_0000 | 0x0000_0008);
+        }
+        let _ = cleanup.spawn();
+        unsafe { SWEEPER_SPAWNED = true };
+    }
+}
+
+unsafe fn set_uninstall_step_text(text: &str) {
+    SetWindowTextW(HWND_STEP_LABEL, to_wide(&format!("{text}\0")).as_ptr());
+}
+
+/// the real removal work, run on the wizard's worker thread. reports via
+/// the step label + progress bar; WM_DESTROY guarantees the sweeper runs
+/// even if the user closes the window mid-uninstall.
+unsafe fn run_uninstall_steps() {
+    let keep_data = UNINSTALL_KEEP_DATA;
+    let install_dir = unsafe { uninstall_dir_snapshot().unwrap_or_else(resolve_uninstall_dir) };
+    let data_dir = app_data_dir();
+
+    set_uninstall_step_text("Closing BlastWA...");
+    SendMessageW(HWND_PROGRESS, PBM_SETPOS, 10, 0);
+    kill_running_app();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+
+    set_uninstall_step_text("Removing shortcuts...");
+    SendMessageW(HWND_PROGRESS, PBM_SETPOS, 25, 0);
+    remove_profile_shortcuts();
+
+    set_uninstall_step_text("Cleaning registry...");
+    SendMessageW(HWND_PROGRESS, PBM_SETPOS, 40, 0);
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let uninstall_path = format!(r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", APP_NAME);
+    let _ = hkcu.delete_subkey_all(&uninstall_path);
+
+    set_uninstall_step_text("Removing account data...");
+    SendMessageW(HWND_PROGRESS, PBM_SETPOS, 55, 0);
+    let mut data_gone = true;
+    if !keep_data {
+        data_gone = remove_dir_with_retry(&data_dir, 10);
+    }
+
+    set_uninstall_step_text("Removing program files...");
+    SendMessageW(HWND_PROGRESS, PBM_SETPOS, 75, 0);
+    let self_exe = std::env::current_exe().ok();
+    let inside_install_dir = self_exe.as_ref().and_then(|p| p.parent()) == Some(install_dir.as_path());
+    if !inside_install_dir {
+        remove_dir_with_retry(&install_dir, 5);
+    } else {
+        // delete everything in the install dir except the running
+        // uninstaller; the sweeper takes the rest after this process exits
+        if let Ok(entries) = std::fs::read_dir(&install_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if Some(&path) == self_exe.as_ref() {
+                    continue;
+                }
+                if path.is_dir() {
+                    let _ = std::fs::remove_dir_all(&path);
+                } else {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+    }
+
+    set_uninstall_step_text("Finishing up...");
+    SendMessageW(HWND_PROGRESS, PBM_SETPOS, 90, 0);
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    SendMessageW(HWND_PROGRESS, PBM_SETPOS, 100, 0);
+
+    // keep data can only be honored when it is actually still there
+    UNINSTALL_KEEP_DATA = keep_data && data_dir.exists();
+    let _ = data_gone;
+    UNINSTALL_STEP = UninstallStep::Done;
+    update_wizard_view();
+}
+
 #[inline]
 fn rgb(r: u8, g: u8, b: u8) -> u32 {
     (r as u32) | ((g as u32) << 8) | ((b as u32) << 16)
@@ -229,108 +430,6 @@ fn register_windows_uninstaller(install_dir: &Path, exe_path: &Path, uninstaller
     let _ = uninstall_key.set_value("NoRepair", &1u32);
 }
 
-fn perform_uninstall() -> Result<(), String> {
-    // a running app holds locks on its own exe and the data dir; close it
-    // first or every later delete attempt fails
-    let mut kill = Command::new("taskkill");
-    kill.args(["/F", "/IM", "blastwa.exe"]);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        kill.creation_flags(CREATE_NO_WINDOW);
-    }
-    let _ = kill.spawn();
-
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let uninstall_path = format!(r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", APP_NAME);
-    let registered_install_dir = hkcu
-        .open_subkey(&uninstall_path)
-        .ok()
-        .and_then(|key| key.get_value::<String, _>("InstallLocation").ok())
-        .map(PathBuf::from);
-
-    if let Some(desktop) = dirs::desktop_dir() {
-        let lnk = desktop.join("BlastWA.lnk");
-        let _ = std::fs::remove_file(lnk);
-        if let Ok(entries) = std::fs::read_dir(&desktop) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let is_profile_shortcut = path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .map(|name| name.starts_with("BlastWA - ") && name.ends_with(".lnk"))
-                    .unwrap_or(false);
-                if is_profile_shortcut {
-                    let _ = std::fs::remove_file(path);
-                }
-            }
-        }
-    }
-
-    if let Some(data_dir) = dirs_localappdata() {
-        let start_menu = data_dir
-            .join("..")
-            .join("Roaming")
-            .join("Microsoft")
-            .join("Windows")
-            .join("Start Menu")
-            .join("Programs");
-        let lnk = start_menu.join("BlastWA.lnk");
-        let _ = std::fs::remove_file(lnk);
-    }
-
-    // brief locks can linger right after the taskkill; retry briefly
-    for _ in 0..10 {
-        if !app_data_dir().exists() {
-            break;
-        }
-        if std::fs::remove_dir_all(app_data_dir()).is_ok() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(200));
-    }
-
-    let install_dir = registered_install_dir
-        .or_else(|| std::env::current_exe().ok().and_then(|path| path.parent().map(Path::to_path_buf)))
-        .unwrap_or_else(default_install_dir);
-    let current_exe = std::env::current_exe().ok();
-    if current_exe.as_ref().and_then(|path| path.parent()) != Some(install_dir.as_path()) {
-        let _ = std::fs::remove_dir_all(&install_dir);
-    } else {
-        // self-delete: the running uninstaller keeps uninstall.exe locked
-        // until its dialog is dismissed, so a detached sweeper retries
-        // rmdir until every process is out of the way. it runs from a batch
-        // file (not an inline `cmd /C` one-liner) because inline `if ... exit
-        // & ping` parses as one conditional and skips the delay, spinning
-        // the whole loop out before the user can dismiss anything. ping
-        // provides the delay because timeout.exe exits instantly without a
-        // console, and the cmd's working directory must sit outside the
-        // tree it removes.
-        let sweeper = std::env::temp_dir().join("blastwa_uninstall_sweeper.cmd");
-        let bat = format!(
-            "@echo off\r\nfor /l %%i in (1,1,120) do (\r\n  rmdir /s /q \"{data}\" >nul 2>&1\r\n  rmdir /s /q \"{install}\" >nul 2>&1\r\n  if not exist \"{install}\" del \"%~f0\" >nul 2>&1\r\n  if not exist \"{install}\" exit\r\n  ping -n 2 127.0.0.1 >nul\r\n)\r\ndel \"%~f0\" >nul 2>&1\r\n",
-            data = app_data_dir().to_string_lossy().replace('"', ""),
-            install = install_dir.to_string_lossy().replace('"', ""),
-        );
-        if std::fs::write(&sweeper, bat).is_ok() {
-            let mut cleanup = Command::new("cmd.exe");
-            cleanup.args(["/C", &sweeper.to_string_lossy()]);
-            cleanup.current_dir(std::env::temp_dir());
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                cleanup.creation_flags(0x0800_0000 | 0x0000_0008);
-            }
-            let _ = cleanup.spawn();
-        }
-    }
-
-    let _ = hkcu.delete_subkey_all(uninstall_path);
-
-    Ok(())
-}
-
 fn perform_installation() -> Result<(), String> {
     let chrome = match find_chrome() {
         Some(c) => c,
@@ -417,7 +516,16 @@ fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+/// TextOutW with the UTF-16 length computed for the caller
+unsafe fn text_out(hdc: HDC, x: i32, y: i32, s: &str) {
+    TextOutW(hdc, x, y, to_wide(s).as_ptr(), s.encode_utf16().count() as i32);
+}
+
 unsafe fn update_wizard_view() {
+    if UNINSTALL_MODE {
+        update_uninstall_view();
+        return;
+    }
     let step = CURRENT_STEP;
 
     let show_location = step == WizardStep::ChooseLocation;
@@ -453,6 +561,55 @@ unsafe fn update_wizard_view() {
             EnableWindow(HWND_CANCEL, 0);
         }
         WizardStep::Finish => {
+            ShowWindow(HWND_BACK, SW_HIDE);
+            ShowWindow(HWND_CANCEL, SW_HIDE);
+            EnableWindow(HWND_NEXT, 1);
+            SetWindowTextW(HWND_NEXT, to_wide("Finish\0").as_ptr());
+        }
+    }
+
+    InvalidateRect(HWND_MAIN, std::ptr::null(), 1);
+}
+
+unsafe fn update_uninstall_view() {
+    let step = UNINSTALL_STEP;
+
+    // install-only controls stay hidden for the whole uninstall flow
+    ShowWindow(HWND_EDIT_PATH, SW_HIDE);
+    ShowWindow(HWND_BTN_BROWSE, SW_HIDE);
+    ShowWindow(HWND_CHK_DESKTOP, SW_HIDE);
+    ShowWindow(HWND_CHK_STARTMENU, SW_HIDE);
+    ShowWindow(HWND_CHK_LAUNCH, SW_HIDE);
+
+    let show_options = step == UninstallStep::Options;
+    let show_working = step == UninstallStep::Working;
+    ShowWindow(HWND_CHK_DATA, if show_options { SW_SHOW } else { SW_HIDE });
+    ShowWindow(HWND_STEP_LABEL, if show_working { SW_SHOW } else { SW_HIDE });
+    ShowWindow(HWND_PROGRESS, if show_working { SW_SHOW } else { SW_HIDE });
+
+    match step {
+        UninstallStep::Welcome => {
+            ShowWindow(HWND_BACK, SW_HIDE);
+            ShowWindow(HWND_CANCEL, SW_SHOW);
+            EnableWindow(HWND_CANCEL, 1);
+            EnableWindow(HWND_NEXT, 1);
+            SetWindowTextW(HWND_NEXT, to_wide("Next >\0").as_ptr());
+            SetWindowTextW(HWND_CANCEL, to_wide("Cancel\0").as_ptr());
+        }
+        UninstallStep::Options => {
+            ShowWindow(HWND_BACK, SW_SHOW);
+            ShowWindow(HWND_CANCEL, SW_SHOW);
+            EnableWindow(HWND_CANCEL, 1);
+            EnableWindow(HWND_NEXT, 1);
+            SetWindowTextW(HWND_NEXT, to_wide("Uninstall\0").as_ptr());
+            SetWindowTextW(HWND_CANCEL, to_wide("Cancel\0").as_ptr());
+        }
+        UninstallStep::Working => {
+            ShowWindow(HWND_BACK, SW_HIDE);
+            ShowWindow(HWND_CANCEL, SW_HIDE);
+            EnableWindow(HWND_NEXT, 0);
+        }
+        UninstallStep::Done => {
             ShowWindow(HWND_BACK, SW_HIDE);
             ShowWindow(HWND_CANCEL, SW_HIDE);
             EnableWindow(HWND_NEXT, 1);
@@ -560,7 +717,22 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
             );
             SendMessageW(HWND_CHK_LAUNCH, BM_SETCHECK, BST_CHECKED as WPARAM, 0);
 
-            for ctrl in [HWND_BACK, HWND_NEXT, HWND_CANCEL, HWND_EDIT_PATH, HWND_BTN_BROWSE, HWND_CHK_DESKTOP, HWND_CHK_STARTMENU, HWND_CHK_LAUNCH] {
+            // uninstall-only controls (options page + working page step text)
+            HWND_CHK_DATA = CreateWindowExW(
+                0, to_wide("BUTTON\0").as_ptr(), to_wide("Also delete account data (WhatsApp sessions, profiles)\0").as_ptr(),
+                WS_CHILD | BS_AUTOCHECKBOX as u32,
+                180, 155, 380, 24, hwnd, IDC_CHK_DATA as HMENU, hinstance, std::ptr::null(),
+            );
+            // unchecked by default: keeping sessions means a reinstall does
+            // not require re-scanning every account's QR code
+
+            HWND_STEP_LABEL = CreateWindowExW(
+                0, to_wide("STATIC\0").as_ptr(), to_wide("Preparing...\0").as_ptr(),
+                WS_CHILD,
+                180, 195, 380, 22, hwnd, IDC_STEP_LABEL as HMENU, hinstance, std::ptr::null(),
+            );
+
+            for ctrl in [HWND_BACK, HWND_NEXT, HWND_CANCEL, HWND_EDIT_PATH, HWND_BTN_BROWSE, HWND_CHK_DESKTOP, HWND_CHK_STARTMENU, HWND_CHK_LAUNCH, HWND_CHK_DATA, HWND_STEP_LABEL] {
                 SendMessageW(ctrl, WM_SETFONT, FONT_BODY as WPARAM, 1);
             }
 
@@ -570,6 +742,41 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
 
         WM_COMMAND => {
             let id = loword(wparam as u32) as isize;
+            if UNINSTALL_MODE {
+                match id {
+                    IDC_BTN_NEXT => {
+                        match UNINSTALL_STEP {
+                            UninstallStep::Welcome => {
+                                UNINSTALL_STEP = UninstallStep::Options;
+                                update_wizard_view();
+                            }
+                            UninstallStep::Options => {
+                                // checkbox checked = delete data; unchecked = keep
+                                UNINSTALL_KEEP_DATA =
+                                    SendMessageW(HWND_CHK_DATA, BM_GETCHECK, 0, 0) != BST_CHECKED as isize;
+                                UNINSTALL_DIR = Some(resolve_uninstall_dir());
+                                UNINSTALL_STEP = UninstallStep::Working;
+                                update_wizard_view();
+                                std::thread::spawn(|| unsafe { run_uninstall_steps() });
+                            }
+                            UninstallStep::Working => {}
+                            UninstallStep::Done => {
+                                spawn_uninstall_sweeper(!UNINSTALL_KEEP_DATA);
+                                PostQuitMessage(0);
+                            }
+                        }
+                    }
+                    IDC_BTN_BACK => {
+                        if UNINSTALL_STEP == UninstallStep::Options {
+                            UNINSTALL_STEP = UninstallStep::Welcome;
+                            update_wizard_view();
+                        }
+                    }
+                    IDC_BTN_CANCEL => PostQuitMessage(0),
+                    _ => {}
+                }
+                return 0;
+            }
             match id {
                 IDC_BTN_BROWSE => {
                     let current = get_chosen_install_dir();
@@ -676,10 +883,55 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
             SelectObject(hdc, FONT_TITLE);
             TextOutW(hdc, 40, 115, to_wide("BlastWA\0").as_ptr(), 7);
             SelectObject(hdc, FONT_BODY);
-            TextOutW(hdc, 34, 145, to_wide("Setup Wizard\0").as_ptr(), 12);
+            if UNINSTALL_MODE {
+                TextOutW(hdc, 34, 145, to_wide("Uninstall\0").as_ptr(), 9);
+            } else {
+                TextOutW(hdc, 34, 145, to_wide("Setup Wizard\0").as_ptr(), 12);
+            }
             TextOutW(hdc, 55, 170, to_wide("v0.2.0\0").as_ptr(), 6);
 
             SetTextColor(hdc, rgb(30, 30, 30));
+            if UNINSTALL_MODE {
+                match UNINSTALL_STEP {
+                    UninstallStep::Welcome => {
+                        SelectObject(hdc, FONT_TITLE);
+                        text_out(hdc, 180, 25, "Uninstall BlastWA");
+                        SelectObject(hdc, FONT_BODY);
+                        text_out(hdc, 180, 70, "BlastWA will be removed from your computer.");
+                        text_out(hdc, 180, 95, "Program files, shortcuts and registry entries will be deleted.");
+                        text_out(hdc, 180, 145, "Click Next to continue.");
+                    }
+                    UninstallStep::Options => {
+                        SelectObject(hdc, FONT_TITLE);
+                        text_out(hdc, 180, 25, "Remove Account Data?");
+                        SelectObject(hdc, FONT_BODY);
+                        text_out(hdc, 180, 70, "Account data holds your WhatsApp sessions and profiles.");
+                        text_out(hdc, 180, 95, "Leave the box unchecked to keep it for a future install.");
+                        text_out(hdc, 180, 120, "Check the box to delete it permanently.");
+                        text_out(hdc, 180, 190, "Data location:");
+                        text_out(hdc, 180, 210, &app_data_dir().to_string_lossy());
+                    }
+                    UninstallStep::Working => {
+                        SelectObject(hdc, FONT_TITLE);
+                        text_out(hdc, 180, 25, "Uninstalling BlastWA...");
+                        SelectObject(hdc, FONT_BODY);
+                        text_out(hdc, 180, 70, "Please wait while BlastWA is being removed.");
+                    }
+                    UninstallStep::Done => {
+                        SelectObject(hdc, FONT_TITLE);
+                        text_out(hdc, 180, 25, "Uninstall Complete");
+                        SelectObject(hdc, FONT_BODY);
+                        text_out(hdc, 180, 70, "BlastWA has been removed from your computer.");
+                        if UNINSTALL_KEEP_DATA {
+                            text_out(hdc, 180, 95, "Your account data was kept at:");
+                            text_out(hdc, 180, 115, &app_data_dir().to_string_lossy());
+                        }
+                        text_out(hdc, 180, 150, "Click Finish to exit.");
+                    }
+                }
+                EndPaint(hwnd, &ps);
+                return 0;
+            }
             match CURRENT_STEP {
                 WizardStep::Welcome => {
                     SelectObject(hdc, FONT_TITLE);
@@ -725,6 +977,13 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
         }
 
         WM_DESTROY => {
+            // if the user closes the window mid-uninstall, the removal steps
+            // already ran — make sure the self-cleanup sweeper still spawns
+            if UNINSTALL_MODE
+                && !matches!(UNINSTALL_STEP, UninstallStep::Welcome | UninstallStep::Options)
+            {
+                spawn_uninstall_sweeper(!UNINSTALL_KEEP_DATA);
+            }
             if FONT_TITLE != 0 { DeleteObject(FONT_TITLE); }
             if FONT_BODY != 0 { DeleteObject(FONT_BODY); }
             if HICON_APP != 0 { DestroyIcon(HICON_APP); }
@@ -748,14 +1007,7 @@ fn main() {
         .unwrap_or(false);
 
     if exe_is_uninstaller || args.iter().any(|a| a == "--uninstall") {
-        let _ = perform_uninstall();
-        #[cfg(windows)]
-        unsafe {
-            let msg = to_wide("BlastWA has been uninstalled. Leftover install files are removed automatically within a few seconds.\0");
-            let title = to_wide("BlastWA Uninstall\0");
-            MessageBoxW(0, msg.as_ptr(), title.as_ptr(), MB_ICONINFORMATION | MB_OK);
-        }
-        std::process::exit(0);
+        unsafe { UNINSTALL_MODE = true; }
     }
 
     unsafe {
@@ -795,7 +1047,7 @@ fn main() {
         let hwnd = CreateWindowExW(
             WS_EX_APPWINDOW,
             class_name.as_ptr(),
-            to_wide(APP_TITLE).as_ptr(),
+            to_wide(if UNINSTALL_MODE { "BlastWA Uninstall" } else { APP_TITLE }).as_ptr(),
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
             pos_x, pos_y, win_w, win_h,
             0, 0, hinstance, std::ptr::null(),
