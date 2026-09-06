@@ -132,6 +132,8 @@ async function navigate(state) {
 
 const YES = { number: '6282132102060', exists: true, kind: 'Regular' };
 const NO = { number: '6289541071050', exists: false, kind: 'Not Found' };
+// errored probes must render as their own state — never as a clean "no"
+const ERR = { number: '6281111111111', exists: false, kind: 'Error', error: 'cdp evaluate failed' };
 
 (async () => {
   // --- s1: a completed check survives a tab switch, with no re-check ---
@@ -201,6 +203,39 @@ const NO = { number: '6289541071050', exists: false, kind: 'Not Found' };
     g.$('btn-export-valid').disabled === true);
   assert('s5 invalid rows are still cached and rendered',
     (g.$('check-body').innerHTML.match(/<tr[\s>]/g) || []).length === 1);
+
+  // --- s6: an errored probe renders as an error, never as a clean "no" ---
+  // (the regression behind "0 of 50 on whatsapp" on a real contact list:
+  // per-number failures used to fold into Not Found)
+  const h = await navigate({ checkResult: [ERR, YES] });
+  h.$('btn-run-check')._h.click();
+  await new Promise((r) => setTimeout(r, 30));
+  assert('s6 error row carries the error dot + row tint',
+    /wa-err/.test(h.$('check-body').innerHTML) &&
+    /check-error/.test(h.$('check-body').innerHTML));
+  assert('s6 error row surfaces the reason',
+    /cdp evaluate failed/.test(h.$('check-body').innerHTML));
+  assert('s6 summary separates failed from not-found',
+    /failed/.test(h.$('check-summary').innerHTML) &&
+    /not found/.test(h.$('check-summary').innerHTML));
+  assert('s6 a valid row still enables export beside an errored one',
+    h.$('btn-export-valid').disabled === false);
+  // an all-error run must not trip the all-miss suspicion hint (it says why)
+  const i2 = await navigate({ checkResult: [ERR, ERR] });
+  i2.$('btn-run-check')._h.click();
+  await new Promise((r) => setTimeout(r, 30));
+  assert('s6 all-error summary names the failed count',
+    /failed/.test(i2.$('check-summary').innerHTML));
+
+  // --- s7: a clean all-miss on a real-sized list gets the suspicion hint ---
+  const manyNo = Array.from({ length: 12 }, (_, k) => ({
+    number: '628000000' + String(100 + k), exists: false, kind: 'Not Found',
+  }));
+  const j = await navigate({ checkResult: manyNo });
+  j.$('btn-run-check')._h.click();
+  await new Promise((r) => setTimeout(r, 30));
+  assert('s7 clean 0-hit run carries the re-check hint',
+    /0 hits is unusual/.test(j.$('check-summary').innerHTML));
 
   console.log('');
   console.log(failures ? `${failures} FAILURES` : 'ALL CHECKER CACHE CHECKS PASSED');

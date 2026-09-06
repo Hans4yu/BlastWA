@@ -67,7 +67,7 @@ pub(crate) fn import_contacts(
         }
         other => {
             return Err(format!(
-                "\"{path}\" is not a contact file — import accepts .txt, .csv, .xlsx or .xls"
+                "\".{other}\" is not a contact file — import accepts .txt, .csv, .xlsx or .xls"
             ))
         }
     };
@@ -85,7 +85,14 @@ pub(crate) async fn check_numbers_cmd(
     ctx: State<'_, AppCtx>,
     app: tauri::AppHandle,
 ) -> Result<Vec<CheckOutcome>, String> {
-    let injector = ctx.pipeline.get_injector(&account).await.map_err(|e| e.to_string())?;
+    // attach-only: a check must never launch chrome or wait on a qr scan —
+    // that was the "Checking..." that hung forever when no session was live.
+    // get_injector_attached reuses the campaign's page when one is running.
+    let injector = ctx
+        .pipeline
+        .get_injector_attached(&account)
+        .await
+        .map_err(|e| e.to_string())?;
     let numbers: Vec<String> = ctx
         .contacts
         .lock()
@@ -94,7 +101,9 @@ pub(crate) async fn check_numbers_cmd(
         .iter()
         .map(|c| c.number.clone())
         .collect();
-    let outcomes = check_numbers(&injector, &numbers, |checked, tot, outcome| {
+    // a running blast shares this page: pace the checker more politely
+    let slow_mode = ctx.state.running.load(std::sync::atomic::Ordering::Relaxed);
+    let outcomes = check_numbers(&injector, &numbers, slow_mode, |checked, tot, outcome| {
         // stream each result so the contacts page can render live
         let _ = app.emit(
             "check_progress",
@@ -104,6 +113,7 @@ pub(crate) async fn check_numbers_cmd(
                 "number": outcome.number,
                 "exists": outcome.exists,
                 "kind": outcome.kind,
+                "error": outcome.error,
             }),
         );
     })

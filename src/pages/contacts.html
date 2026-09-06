@@ -272,7 +272,18 @@
 
     function checkRowHtml(o, i) {
       // compact dot status + row tint: a column of chunky badges was hard
-      // to scan; the tint carries the verdict, the dot carries the label
+      // to scan; the tint carries the verdict, the dot carries the label.
+      // an errored check is NOT a "no" — it renders as its own state with
+      // the reason, so a broken run can never masquerade as data
+      if (o.error) {
+        return `
+          <tr class="check-error" title="${esc(o.error)}">
+            <td>${i + 1}</td>
+            <td class="mono">${esc(o.number)}</td>
+            <td><span class="wa-err" title="${esc(o.error)}">error</span></td>
+            <td style="color:var(--text-dim);font-size:11px">${esc(String(o.error).slice(0, 60))}</td>
+          </tr>`;
+      }
       const state = o.exists ? 'valid' : 'invalid';
       return `
         <tr class="check-${state}">
@@ -287,10 +298,21 @@
       const el = document.getElementById('check-summary');
       if (!el || !outcomes.length) return;
       const yes = outcomes.filter((o) => o.exists).length;
-      el.innerHTML =
-        `<span class="wa-yes"><b>${yes}</b> on WhatsApp</span> · ` +
-        `<span class="wa-no"><b>${outcomes.length - yes}</b> not found</span>` +
-        ` · ${outcomes.length} checked`;
+      const failed = outcomes.filter((o) => o.error).length;
+      const parts =
+        [`<span class="wa-yes"><b>${yes}</b> on WhatsApp</span>`];
+      if (failed) parts.push(`<span class="wa-err"><b>${failed}</b> failed</span>`);
+      parts.push(`<span class="wa-no"><b>${outcomes.length - yes - failed}</b> not found</span>`,
+        `${outcomes.length} checked`);
+      let html = parts.join(' · ');
+      // a real contact list never misses 100%: if every number came back
+      // "not found" (no errors), the run was most likely starved by a
+      // running campaign or a wa hiccup — say so instead of implying the
+      // list is garbage
+      if (yes === 0 && !failed && outcomes.length >= 10) {
+        html += ` · <b>0 hits is unusual for a real list</b> — wait for any running campaign to finish and Run Check again`;
+      }
+      el.innerHTML = html;
     }
 
     function renderCheckRows(outcomes) {
@@ -330,7 +352,7 @@
       if (!document.getElementById('check-body')) return;
       const p = ev.payload || ev;
       appendCheckRow(p);
-      lastOutcomes.push({ number: p.number, exists: !!p.exists, kind: p.kind || '' });
+      lastOutcomes.push({ number: p.number, exists: !!p.exists, kind: p.kind || '', error: p.error || undefined });
       // persist incrementally: a crash or tab switch mid-check keeps what ran
       saveCheckCache(document.getElementById('check-account').value, lastOutcomes);
       applyValidState(lastOutcomes);
@@ -360,7 +382,7 @@
           account: document.getElementById('check-account').value,
         });
         const list = Array.isArray(outcomes) ? outcomes : [];
-        lastOutcomes = list.map((o) => ({ number: o.number, exists: !!o.exists, kind: o.kind || '' }));
+        lastOutcomes = list.map((o) => ({ number: o.number, exists: !!o.exists, kind: o.kind || '', error: o.error || undefined }));
         saveCheckCache(document.getElementById('check-account').value, lastOutcomes);
         renderCheckRows(lastOutcomes);
         applyValidState(lastOutcomes);

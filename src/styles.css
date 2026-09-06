@@ -732,12 +732,12 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
 
 
 /* checker results: compact dot status + quiet row tint (replaces badges) */
-.wa-yes, .wa-no {
+.wa-yes, .wa-no, .wa-err {
   font-size: var(--fs-xs);
   font-weight: 600;
   white-space: nowrap;
 }
-.wa-yes::before, .wa-no::before {
+.wa-yes::before, .wa-no::before, .wa-err::before {
   content: '';
   display: inline-block;
   width: 7px;
@@ -750,9 +750,15 @@ input[readonly] { background: var(--table-head-bg); color: var(--text-dim); }
 .wa-yes::before { background: var(--ok); }
 .wa-no { color: var(--danger); }
 .wa-no::before { background: var(--danger); }
+/* errored checks: warn color — a failed probe is not a "no" */
+.wa-err { color: var(--warn); }
+.wa-err::before { background: var(--warn); }
 #check-body tr.check-valid td {
   background: color-mix(in srgb, var(--ok) 7%, transparent);
 }
 #check-body tr.check-invalid td {
   background: color-mix(in srgb, var(--danger) 5%, transparent);
+}
+#check-body tr.check-error td {
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
 }

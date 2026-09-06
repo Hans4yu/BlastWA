@@ -309,25 +309,42 @@ impl JsInjector {
 
     pub async fn check_number(&self, number: &str) -> Result<NumberStatus> {
         let clean = number.replace('+', "");
+        // payload safety: the number is user data, never inline it
+        let n = serde_json::to_string(&clean)?;
         let script = format!(
             r#"(async () => {{
                 try {{
-                    // wa-js v4.6: queryExists returns an object (wid, biz, lid...)
-                    // on hit, null when the number has no whatsapp account. there
-                    // is no `.exists` field anymore (older bundles had one).
-                    var r = await WPP.contact.queryExists('{n}@c.us');
+                    var n = {n};
+                    var wid = n + '@c.us';
+                    // wa-js current: queryWidExists (docs-verified, carries an
+                    // .exists flag); older bundles only have queryExists.
+                    // both return an object on hit and null on miss.
+                    var r = null;
+                    if (WPP.contact && typeof WPP.contact.queryWidExists === 'function') {{
+                        r = await WPP.contact.queryWidExists(wid);
+                    }} else if (WPP.contact && typeof WPP.contact.queryExists === 'function') {{
+                        r = await WPP.contact.queryExists(wid);
+                    }} else {{
+                        return {{ numtoCheck: n, error: 'no WPP.contact query api on this page' }};
+                    }}
+                    if (r === null || r === undefined) {{
+                        return {{ numtoCheck: n, exists: false, canReceiveMessage: false, isBusiness: false, wid: '' }};
+                    }}
+                    // trust an explicit .exists flag when the bundle carries it;
+                    // otherwise an object (wid/biz/lid) means the number is live
+                    var hit = (typeof r.exists === 'boolean') ? r.exists : !!r;
                     return {{
-                        numtoCheck: '{n}',
-                        exists: !!r,
-                        canReceiveMessage: !!r,
-                        isBusiness: !!(r && r.business),
-                        wid: r ? String(r.wid || '') : ''
+                        numtoCheck: n,
+                        exists: hit,
+                        canReceiveMessage: hit,
+                        isBusiness: !!(r.biz || r.business),
+                        wid: String((r.wid && (r.wid._serialized || r.wid)) || '')
                     }};
                 }} catch (ex) {{
-                    return {{ numtoCheck: '{n}', error: String(ex) }};
+                    return {{ numtoCheck: {n}, error: String(ex) }};
                 }}
             }})()"#,
-            n = clean
+            n = n
         );
         let v = self.eval_json(&script).await?;
         Ok(serde_json::from_value(v)?)
