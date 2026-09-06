@@ -122,7 +122,6 @@ pub struct DataPaths {
     pub profiles: PathBuf,
     pub accounts: PathBuf,
     pub data: PathBuf,
-    pub reports: PathBuf,
     pub templates: PathBuf,
     pub wpp: PathBuf,
 }
@@ -134,7 +133,6 @@ impl DataPaths {
             profiles: base.join("Profiles"),
             accounts: base.join("accounts"),
             data: base.join("Data"),
-            reports: base.join("Reports"),
             templates: base.join("templates"),
             wpp: base.join("wpp"),
         };
@@ -142,7 +140,6 @@ impl DataPaths {
             &paths.profiles,
             &paths.accounts,
             &paths.data,
-            &paths.reports,
             &paths.templates,
             &paths.wpp,
         ] {

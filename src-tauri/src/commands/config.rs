@@ -18,6 +18,7 @@ pub(crate) fn get_config(ctx: State<'_, AppCtx>) -> Result<serde_json::Value, St
         "api_enabled": cfg.api_enabled,
         "api_port": cfg.api_port,
         "api_token": cfg.api_token,
+        "wpp_last_check_at": cfg.wpp_last_check_at,
         "active_profile": AppConfig::active_profile(),
     }))
 }

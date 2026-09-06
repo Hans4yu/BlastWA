@@ -29,8 +29,16 @@
       </div>
       <div class="field">
         <label>Attachment (image / pdf / video / audio)</label>
-        <input type="file" id="attachment" />
-        <span id="attachment-name" class="mono" style="font-size:12px;color:#0e7c7b"></span>
+        <div class="row" style="margin-bottom:0;align-items:center;flex-wrap:wrap">
+          <button type="button" class="btn btn-sm" id="btn-choose-attachment">Choose File&hellip;</button>
+          <!-- hidden native input: tauri hides real paths from file inputs,
+             so the visible chrome would forever say "no file chosen" even
+             though the dialog below picked a file. it only serves the
+             browser-dev fallback picker. -->
+          <input type="file" id="attachment" style="display:none" />
+          <span id="attachment-name" class="mono" style="font-size:12px;color:#0e7c7b"></span>
+          <button type="button" class="btn btn-sm btn-secondary" id="btn-clear-attachment" style="display:none">Remove</button>
+        </div>
       </div>
       <div class="field" style="margin-bottom:0">
         <label>Caption (for attachments)</label>
@@ -168,6 +176,21 @@
       'schedule-enabled'];
     let attachmentPath = null;
 
+    // single source of truth for the attachment row's visible state — the
+    // chosen path can come from the tauri dialog, the browser-dev fallback
+    // input, or the restored draft
+    function renderAttachment() {
+      $('attachment-name').textContent =
+        attachmentPath ? attachmentPath.split(/[\\/]/).pop() : '';
+      $('btn-clear-attachment').style.display = attachmentPath ? '' : 'none';
+    }
+
+    function setAttachment(path) {
+      attachmentPath = path || null;
+      renderAttachment();
+      saveDraft();
+    }
+
     function saveDraft() {
       const d = { attachmentPath, selectedAccounts: selectedAccountNames() };
       for (const id of draftFields) {
@@ -187,9 +210,7 @@
         else $(id).value = d[id];
       }
       attachmentPath = d.attachmentPath || null;
-      if (attachmentPath) {
-        $('attachment-name').textContent = attachmentPath.split(/[\/]/).pop();
-      }
+      renderAttachment();
       // chips render after list_accounts resolves; stash the saved selection
       // so renderAccountChips can re-apply it
       if (Array.isArray(d.selectedAccounts)) {
@@ -360,24 +381,34 @@
       saveDraft();
     });
 
-    // tauri v2 hides the real path from <input type=file>, so intercept the
-    // picker and use the dialog plugin (browser dev keeps the native input)
-    $('attachment').addEventListener('click', (e) => {
+    // tauri v2 hides the real path from <input type=file> (its label would
+    // say "no file chosen" forever), so the visible picker is a plain button
+    // that routes to the dialog plugin; browser dev falls back to the
+    // hidden native input
+    $('btn-choose-attachment').addEventListener('click', () => {
       const tauriDialog = window.__TAURI__ && window.__TAURI__.dialog;
-      if (!tauriDialog) return;
-      e.preventDefault();
+      if (!tauriDialog) {
+        $('attachment').click();
+        return;
+      }
       tauriDialog.open({
         multiple: false,
         title: 'Choose attachment',
         filters: [{ name: 'Media', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif',
           'pdf', 'mp4', 'mkv', 'webm', 'avi', 'mp3', 'wav', 'ogg', 'opus', 'weba'] }],
       }).then((path) => {
-        if (!path) return;
-        attachmentPath = path;
-        $('attachment-name').textContent = path.split(/[\/]/).pop();
-        saveDraft();
+        if (path) setAttachment(path);
       }).catch(() => {});
     });
+
+    // browser-dev fallback: the native input carries no real path, the
+    // filename is all a mock session can offer
+    $('attachment').addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) setAttachment(f.name);
+    });
+
+    $('btn-clear-attachment').addEventListener('click', () => setAttachment(null));
 
     // account chips: a native multi-select hides status and demands
     // ctrl-click, which nobody discovers. chips show connection state and

@@ -73,6 +73,7 @@
         <input type="text" id="wpp-version" readonly placeholder="bundled (no local version)" />
       </div>
       <button class="btn btn-sm" id="btn-check-wpp">Check for Update</button>
+      <button class="btn btn-sm" id="btn-update-wpp" style="display:none">Download &amp; Install Update</button>
       <p id="wpp-status" style="margin-top:6px;color:var(--text-dim);font-size:11px"></p>
     </div>
   </div>
@@ -175,11 +176,55 @@
 
     const wpp = await invoke('get_wpp_version');
     $('wpp-version').value = wpp.version || wpp.local || 'bundled';
+    // when the last update check ran (persisted by the rust command)
+    if (cfg.wpp_last_check_at) {
+      $('wpp-status').textContent = 'Last checked: ' + cfg.wpp_last_check_at;
+    }
 
+    const setUpToDateUi = () => {
+      $('btn-update-wpp').style.display = 'none';
+    };
     $('btn-check-wpp').onclick = async () => {
-      $('wpp-status').textContent = 'Checking...';
-      const r = await invoke('check_wpp_update');
-      $('wpp-status').textContent = r.message || JSON.stringify(r);
+      const btn = $('btn-check-wpp');
+      btn.disabled = true;
+      $('wpp-status').textContent = 'Checking GitHub for the latest wa-js release...';
+      try {
+        const r = await invoke('check_wpp_update');
+        if (r.up_to_date) {
+          setUpToDateUi();
+          $('wpp-status').textContent =
+            `Up to date${r.current ? ' (' + r.current + ')' : ' (bundled = latest ' + r.latest + ')'}` +
+            ` · checked ${new Date().toLocaleString()}`;
+        } else {
+          // the whole point of the check: offer to actually apply it
+          $('btn-update-wpp').style.display = '';
+          $('wpp-status').textContent =
+            `Update available: ${r.current || 'bundled'} → ${r.latest}`;
+        }
+      } catch (e) {
+        $('wpp-status').textContent = 'Check failed: ' + (e && e.message ? e.message : e);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+    $('btn-update-wpp').onclick = async () => {
+      const btn = $('btn-update-wpp');
+      btn.disabled = true;
+      const prev = btn.textContent;
+      btn.textContent = 'Downloading...';
+      try {
+        const r = await invoke('update_wpp');
+        btn.style.display = 'none';
+        $('wpp-status').textContent =
+          `Installed ${r.version} — takes effect the next time WhatsApp Web is opened`;
+        const w = await invoke('get_wpp_version');
+        $('wpp-version').value = w.version || w.local || 'bundled';
+      } catch (e) {
+        $('wpp-status').textContent = 'Update failed: ' + (e && e.message ? e.message : e);
+        btn.textContent = prev;
+      } finally {
+        btn.disabled = false;
+      }
     };
   };
 

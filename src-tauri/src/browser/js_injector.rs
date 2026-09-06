@@ -571,13 +571,6 @@ impl JsInjector {
         Ok(())
     }
 
-    pub async fn poll_new_messages(&self) -> Result<Value> {
-        self.eval_json(
-            r#"(function(){ try { return WAPI.getAllChatsWithNewMsg(null) || []; } catch(e){ return []; } })()"#,
-        )
-        .await
-    }
-
     // ---------- auto-reply inbox ----------
 
     /// arm (once per page) the WPP `chat.new_message` listener that buffers
