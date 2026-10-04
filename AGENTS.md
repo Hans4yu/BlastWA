@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE: BlastWA
 
-**Generated:** 2026-08-30
-**Commit:** ece7063
+**Updated:** 2026-10-04
+**Commit:** 8e84753
 **Branch:** main
 **Tech Stack:** Rust (Tokio, Axum, Chromiumoxide, Serde) + Tauri v2 + Vanilla JS/HTML5/CSS (SPA router, Chrome CDP automation)
 
@@ -21,6 +21,7 @@ blastwa/
 │   └── verify_router_lifecycle.js
 ├── src/                         # Production frontend Web UI (Vanilla JS SPA)
 │   ├── index.html               # Main window shell & profile launcher modal with shortcut checkbox
+│   ├── AGENTS.md                # Frontend-specific lifecycle and script rules
 │   ├── main.js                  # SPA client router, epoch-guarded lifecycle, event listeners
 │   ├── styles.css               # Desktop dark/light themes & layout
 │   └── pages/                   # Modular SPA views (dashboard, sending, contacts, groups, etc.)
@@ -30,7 +31,8 @@ blastwa/
     ├── icons/                   # Modern multi-size PNGs and multi-layer icon.ico
     └── src/
         ├── lib.rs               # Headless blastwa_core library
-        ├── main.rs              # Desktop GUI binary, 40+ IPC commands & desktop shortcut generator
+        ├── main.rs              # GUI startup, AppCtx, command registration, profile isolation
+        ├── commands/            # Domain-specific Tauri IPC handlers
         ├── account/             # Multi-profile Chrome session storage & registry
         ├── api/                 # Local loopback Axum REST API (/api/blast, /api/status, etc.)
         ├── autoreply/           # Automated keyword response rule engine
@@ -40,11 +42,15 @@ blastwa/
         ├── message/             # Spintax engine ({Hi|Hello}), template variables ([[name]])
         └── updater/             # Auto-updater for WPPConnect bundle assets
 ```
+`src-tauri/tests/account_store.rs` covers persisted account storage. `src-tauri/gen/` contains generated Tauri schemas, not application logic.
 
 ## WHERE TO LOOK
 | Task / Feature | Location | Key Modules / Functions |
 |---|---|---|
-| Desktop GUI & IPC Handlers | `src-tauri/src/main.rs` | `fn main()`, Tauri `invoke_handler`, `open_profile_window` |
+| Desktop GUI Startup | `src-tauri/src/main.rs` | `AppCtx`, background workers, Tauri `invoke_handler`, isolated WebView storage |
+| IPC Handlers | `src-tauri/src/commands/` | Accounts, campaigns, contacts, groups, rules, templates, logs, config, updater, profiles |
+| Profile Launch & Shortcuts | `src-tauri/src/commands/profiles.rs` | `open_profile_window`, desktop shortcut generation |
+| Account Persistence | `src-tauri/src/account/service.rs` | `AccountService`; persisted names are separate from live CDP sessions |
 | Native GUI Installer Wizard | `setup/src/main.rs` | Win32 wizard, `pick_folder`, `register_windows_uninstaller` |
 | Chrome CDP & Automation | `src-tauri/src/browser/` | `cdp_client.rs`, `js_injector.rs` (adaptive bootstrap, serde_json) |
 | Campaign Execution Engine | `src-tauri/src/campaign/` | `sender.rs`, `pipeline.rs`, `human_behavior.rs` |
@@ -61,30 +67,33 @@ blastwa/
 | `Pipeline` | Struct | `src-tauri/src/campaign/pipeline.rs` | Session manager, CDP page pool, and `serve(rx)` REST worker |
 | `JsInjector` | Struct | `src-tauri/src/browser/js_injector.rs` | Evaluates WPPConnect scripts using adaptive polling & serde_json |
 | `normalize_number` | Function | `src-tauri/src/campaign/contact_list.rs` | Smart E.164 normalizer (converts `08xxx` to `628xxx`) |
-| `create_desktop_profile_shortcut` | Function | `src-tauri/src/main.rs` | Generates `.lnk` shortcut with `--profile` flag on user Desktop |
+| `AppCtx` | Struct | `src-tauri/src/main.rs` | Shared GUI state consumed by domain command modules |
 | `LogEntry` | Struct | `src-tauri/src/campaign/log_exporter.rs` | Campaign record with timestamp, status, and error |
 | `route` | Async Fn | `src/main.js` | Fetches HTML fragment, injects scripts, manages navigation epoch |
 | `window.blastwa.esc` | Function | `src/main.js` | Shared HTML sanitization helper preventing XSS |
 
 ## CONVENTIONS
 - **Network Security:** Local Axum server binds STRICTLY to loopback (`127.0.0.1` / `localhost`). Never bind `0.0.0.0`.
+- **API Authentication:** REST routes require `X-BlastWA-Token`; preserve authorization middleware, even on loopback.
 - **Decoupled Architecture:** `blastwa_core` compiles and tests in headless mode; Tauri GUI is gated behind the `gui` feature flag.
+- **Profile Isolation:** Select `--profile` / `BLASTWA_PROFILE` before loading configuration; profile windows use their own WebView data directory.
 - **CDP Payload Safety:** Never format raw strings into JavaScript execution strings; always use `serde_json::to_string()`.
-- **Frontend Script Execution:** SPA page fragments in `src/pages/*.html` are dynamically injected into `#content`. Never declare top-level `const`/`let` in page scripts.
-- **Navigation Safety:** All Tauri listeners in page scripts MUST use the epoch-aware `listen()` wrapper or register teardown callbacks via `addCleanup()`.
+- **Frontend Rules:** Follow `src/AGENTS.md` for dynamically injected page scripts and navigation cleanup.
 - **Safe Directory Operations:** Never call `path.parent().unwrap()`; always check with `if let Some(parent) = path.parent()`.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 - **DO NOT** use unescaped string concatenation when evaluating JavaScript via CDP.
 - **DO NOT** block Tokio worker threads with heavy synchronous file parsing; use `tokio::task::spawn_blocking`.
 - **NEVER** modify `AppState` atomics directly without coordinating through the cancellation token and pipeline channels.
-- **NEVER** re-declare global variables with `const`/`let` in the root scope of `src/pages/*.html` scripts.
 - **NEVER** use hardcoded timeout ceilings for WPP.js bootstrap; use adaptive polling with active DOM readiness checks.
+- **NEVER** overwrite corrupt persisted data before preserving it with `backup_corrupt_file`.
 
 ## COMMANDS
 ```bash
-# Run unit & integration tests (headless core)
-cargo test --lib
+# Run headless core unit tests
+cargo test --package blastwa --lib
+# Run account persistence integration tests
+cargo test --package blastwa --test account_store
 
 # Run full frontend router & modular cache verification tests
 node scripts/verify_router_lifecycle.js
@@ -97,9 +106,16 @@ node scripts/check_window_isolation.js
 # Build release standalone GUI installer
 cargo build --package blastwa-setup --release
 
-# Build headless core binary
-cargo build --package blastwa
+# Build headless core library (no headless executable)
+cargo build --package blastwa --lib
+# Build desktop executable
+cargo build --package blastwa --features gui
 
 # Run Tauri desktop app in dev mode
-cargo tauri dev
+cargo tauri dev --features gui
 ```
+
+## NOTES
+- Run listed commands from repository root. Tauri development requires the Cargo Tauri CLI, Chrome, and Windows WebView2.
+- API startup is conditional on `api_enabled`; port collisions select a later loopback port and persist the effective port.
+- Source-level Node checks use mocks; `scripts/full_live_test.js` and `scripts/capture_ui.js` exercise live UI/CDP surfaces.
